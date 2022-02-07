@@ -1,0 +1,130 @@
+{
+    "modulesContent": {
+        "$edgeAgent": {
+            "properties.desired": {
+                "schemaVersion": "1.1",
+                "runtime": {
+                    "type": "docker",
+                    "settings": {
+                        "minDockerVersion": "v1.25",
+                        "loggingOptions": ""
+                    }
+                },
+                "systemModules": {
+                    "edgeAgent": {
+                        "type": "docker",
+                        "settings": {
+                            "image": "mcr.microsoft.com/azureiotedge-agent:1.1",
+                            "createOptions": ""
+                        },
+                        "env": {
+                            "ExperimentalFeatures__Enabled": {
+                                "value": "true"
+                            },
+                            "ExperimentalFeatures__EnableGetLogs": {
+                                "value": "true"
+                            },
+                            "ExperimentalFeatures__EnableUploadLogs": {
+                                "value": "true"
+                            },
+                            "ExperimentalFeatures__EnableMetrics": {
+                                "value": "true"
+                            }
+                        }
+                    },
+                    "edgeHub": {
+                        "type": "docker",
+                        "status": "running",
+                        "restartPolicy": "always",
+                        "settings": {
+                            "image": "mcr.microsoft.com/azureiotedge-hub:1.1",
+                            "createOptions": "{\"HostConfig\":{\"PortBindings\":{\"443/tcp\":[{\"HostPort\":\"443\"}],\"5671/tcp\":[{\"HostPort\":\"5671\"}],\"8883/tcp\":[{\"HostPort\":\"8883\"}]}}}"
+                        },
+                        "env": {
+                            "SslProtocols": {
+                                "value": "tls1.2"
+                            }
+                        },
+                        "startupOrder": 0
+                    }
+                },
+                "modules": {
+                    "AzureMonitorForIotEdgeModule": {
+                        "settings": {
+                            "image": "mcr.microsoft.com/azuremonitor/containerinsights/ciprod:iot-0.1.3.3",
+                            "createOptions": "{\"HostConfig\":{\"LogConfig\":{\"Type\":\"json-file\",\"Config\":{\"max-size\":\"4m\",\"max-file\":\"7\"}}}}"
+                        },
+                        "type": "docker",
+                        "env": {
+                            "UploadTarget": {
+                                "value": "IotMessage"
+                            },
+                            "MetricsEndpointsCSV": {
+                                "value": "http://edgeHub:9600/metrics,http://edgeAgent:9600/metrics,http://ompadapter:9702/metrics,http://opcpublisher:9702/metrics"
+                            },
+                            "HubResourceID": {
+                                "value": "Add your information here - /subscription/<subscription id>/resourcegroup/<resource group name>/..."
+                            },
+                            "ScrapeFrequencyInSecs": {
+                                "value": "300"
+                            },
+                            "AllowedMetrics": {
+                                "value": ""
+                            },
+                            "BlockedMetrics": {
+                                "value": ""
+                            },
+                            "CompressForUpload": {
+                                "value": "false"
+                            },
+                            "experimentalfeatures__enableMetrics": {
+                                "value": true
+                            }
+                        },
+                        "status": "running",
+                        "restartPolicy": "always",
+                        "version": "1.0",
+                        "startupOrder": 4
+                    },
+                    "opcpublisher": {
+                        "settings": {
+                            "image": "ompassetconnector.azurecr.io/azureiotedgeopcpublishermvp:3.0.47484894-preview",
+                            "createOptions": "{\"Hostname\":\"opcpublisher\",\"Cmd\":[],\"HostConfig\":{\"Mounts\":[{\"Type\":\"volume\",\"Target\":\"/appdata\",\"Source\":\"ompadapter\",\"Consistency\":\"consistent\",\"RW\":true}]}}"
+                        },
+                        "type": "docker",
+                        "version": "1.0",
+                        "status": "running",
+                        "restartPolicy": "always",
+                        "startupOrder": 3
+                    },
+                    "ompadapter": {
+                        "settings": {
+                            "image": "industrialiotedgetest.azurecr.io/iotedge/omp-adapter:latest-debug",
+                            "createOptions": "{\"Hostname\":\"ompadapter\",\"HostConfig\":{\"Mounts\":[{\"Type\":\"volume\",\"Target\":\"/appdata\",\"Source\":\"ompadapter\",\"Consistency\":\"consistent\",\"RW\":true}]},\"User\":\"iiotuser\",\"ExposedPorts\":{\"9702/tcp\":{}},\"Cmd\":[\"--pki /appdata/pki\",\"--config /appdata/configuration\"]}"
+                        },
+                        "type": "docker",
+                        "status": "running",
+                        "restartPolicy": "always",
+                        "version": "1.0",
+                        "startupOrder": 1
+                    }
+                }
+            }
+        },
+        "$edgeHub": {
+            "properties.desired": {
+                "schemaVersion": "1.1",
+                "routes": {
+                    "publisherruntimeinfo": "FROM /messages/modules/opcpublisher/outputs/runtimeinfo INTO BrokeredEndpoint(\"/modules/ompadapter/inputs/publisherruntimeinfo\")",
+                    "upstream": "FROM /messages/* INTO $upstream"
+                },
+                "storeAndForwardConfiguration": {
+                    "timeToLiveSecs": 7200
+                }
+            }
+        },
+        "opcpublisher": {
+            "properties.desired": {}
+        }
+    }
+}

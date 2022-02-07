@@ -1,0 +1,451 @@
+[
+    {
+        "@id": "dtmi:com:azureiot:model:MiaBGateway;1",
+        "@context": [
+            "dtmi:iotcentral:context;2",
+            "dtmi:dtdl:context;2"
+        ],
+        "@type": "Interface",
+        "displayName": {
+            "en": "Manufacturing in a Box Gateway Model"
+        },
+        "contents": [
+            {
+                "@context": [
+                    "dtmi:iotcentral:context;2",
+                    "dtmi:dtdl:context;2"
+                ],
+                "@id": "dtmi:com:azureiot:model:MiaBGateway:MiaBGatewayModule;1",
+                "@type": [
+                    "Relationship",
+                    "EdgeModule"
+                ],
+                "displayName": {
+                    "en": "Manufacturing in a Box Gateway Module"
+                },
+                "maxMultiplicity": 1,
+                "name": "MiaBGatewayModule",
+                "target": [
+                    "dtmi:com:azureiot:MiaBGatewayModule;1"
+                ]
+            }
+        ]
+    },
+    {
+        "@id": "dtmi:com:azureiot:MiaBGatewayModule;1",
+        "@type": "Interface",
+        "contents": [
+            {
+                "@id": "dtmi:com:azureiot:MiaBGatewayModule:rel;1",
+                "@type": [
+                    "Relationship",
+                    "GatewayDevice"
+                ],
+                "displayName": {
+                    "en": "rel"
+                },
+                "name": "rel",
+                "target": []
+            }
+        ],
+        "displayName": {
+            "en": "Manufacturing in a Box Gateway Module"
+        },
+        "extends": [
+            "dtmi:com:azureiot:MiaBGatewayModule:DeviceInformation;1",
+            "dtmi:com:azureiot:MiaBGatewayModule:MiaBSettings;1",
+            "dtmi:com:azureiot:MiaBGatewayModule:MiaBInterface;1"
+        ],
+        "@context": [
+            "dtmi:iotcentral:context;2",
+            "dtmi:dtdl:context;2"
+        ]
+    },
+    {
+        "@context": [
+            "dtmi:iotcentral:context;2",
+            "dtmi:dtdl:context;2"
+        ],
+        "@id": "dtmi:com:azureiot:MiaBGatewayModule:DeviceInformation;1",
+        "@type": "Interface",
+        "displayName": {
+            "en": "Manufacturing in a Box Device Information Interface"
+        },
+        "contents": [
+            {
+                "@type": "Property",
+                "displayName": {
+                    "en": "Processor architecture"
+                },
+                "name": "processorArchitecture",
+                "schema": "string"
+            },
+            {
+                "@type": "Property",
+                "displayName": {
+                    "en": "Hostname"
+                },
+                "name": "hostname",
+                "schema": "string"
+            },
+            {
+                "@type": "Property",
+                "displayName": {
+                    "en": "Platform"
+                },
+                "name": "platform",
+                "schema": "string"
+            },
+            {
+                "@type": "Property",
+                "displayName": {
+                    "en": "OS Type"
+                },
+                "name": "osType",
+                "schema": "string"
+            },
+            {
+                "@type": "Property",
+                "displayName": {
+                    "en": "Operating system"
+                },
+                "name": "osName",
+                "schema": "string"
+            },
+            {
+                "@type": "Property",
+                "displayName": {
+                    "en": "Total memory"
+                },
+                "name": "totalMemory",
+                "schema": "long"
+            },
+            {
+                "@type": "Property",
+                "displayName": {
+                    "en": "Software version"
+                },
+                "name": "swVersion",
+                "schema": "string"
+            }
+        ]
+    },
+    {
+        "@context": [
+            "dtmi:iotcentral:context;2",
+            "dtmi:dtdl:context;2"
+        ],
+        "@id": "dtmi:com:azureiot:MiaBGatewayModule:MiaBSettings;1",
+        "@type": "Interface",
+        "displayName": {
+            "en": "Manufacturing in a Box Settings"
+        },
+        "contents": [
+            {
+                "@type": "Property",
+                "displayName": {
+                    "en": "Debug Telemetry"
+                },
+                "name": "wpDebugTelemetry",
+                "writable": true,
+                "schema": "boolean"
+            },
+            {
+                "@type": "Property",
+                "displayName": {
+                    "en": "OPCUA Endpoint"
+                },
+                "name": "wpOpcuaEndpoint",
+                "writable": true,
+                "schema": {
+                    "@type": "Object",
+                    "displayName": {
+                        "en": "OPCUA Endpoint"
+                    },
+                    "fields": [
+                        {
+                            "displayName": {
+                                "en": "Uri"
+                            },
+                            "name": "Uri",
+                            "schema": "string"
+                        },
+                        {
+                            "displayName": {
+                                "en": "SecurityMode"
+                            },
+                            "name": "SecurityMode",
+                            "schema": {
+                                "@type": "Enum",
+                                "displayName": {
+                                    "en": "Enum"
+                                },
+                                "enumValues": [
+                                    {
+                                        "displayName": {
+                                            "en": "Lowest"
+                                        },
+                                        "enumValue": "Lowest",
+                                        "name": "Lowest"
+                                    },
+                                    {
+                                        "displayName": {
+                                            "en": "Best"
+                                        },
+                                        "enumValue": "Best",
+                                        "name": "Best"
+                                    }
+                                ],
+                                "valueSchema": "string"
+                            }
+                        },
+                        {
+                            "displayName": {
+                                "en": "Credentials"
+                            },
+                            "name": "Credentials",
+                            "schema": {
+                                "@type": "Object",
+                                "displayName": {
+                                    "en": "Credentials"
+                                },
+                                "fields": [
+                                    {
+                                        "displayName": {
+                                            "en": "CredentialType"
+                                        },
+                                        "name": "CredentialType",
+                                        "schema": {
+                                            "@type": "Enum",
+                                            "displayName": {
+                                                "en": "Enum"
+                                            },
+                                            "enumValues": [
+                                                {
+                                                    "displayName": {
+                                                        "en": "Anonymous"
+                                                    },
+                                                    "enumValue": "Anonymous",
+                                                    "name": "Anonymous"
+                                                },
+                                                {
+                                                    "displayName": {
+                                                        "en": "Username"
+                                                    },
+                                                    "enumValue": "Username",
+                                                    "name": "Username"
+                                                }
+                                            ],
+                                            "valueSchema": "string"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    {
+        "@context": [
+            "dtmi:iotcentral:context;2",
+            "dtmi:dtdl:context;2"
+        ],
+        "@id": "dtmi:com:azureiot:MiaBGatewayModule:MiaBInterface;1",
+        "@type": "Interface",
+        "displayName": {
+            "en": "Manufacturing in a Box Interface"
+        },
+        "contents": [
+            {
+                "@type": "Telemetry",
+                "displayName": {
+                    "en": "System Heartbeat"
+                },
+                "name": "tlSystemHeartbeat",
+                "schema": "integer"
+            },
+            {
+                "@type": "Telemetry",
+                "displayName": {
+                    "en": "Free Memory"
+                },
+                "name": "tlFreeMemory",
+                "schema": "long"
+            },
+            {
+                "@type": [
+                    "Telemetry",
+                    "State"
+                ],
+                "displayName": {
+                    "en": "IoT Central Client State"
+                },
+                "name": "stIoTCentralClientState",
+                "schema": {
+                    "@type": "Enum",
+                    "valueSchema": "string",
+                    "enumValues": [
+                        {
+                            "displayName": {
+                                "en": "disconnected"
+                            },
+                            "enumValue": "disconnected",
+                            "name": "disconnected"
+                        },
+                        {
+                            "displayName": {
+                                "en": "connected"
+                            },
+                            "enumValue": "connected",
+                            "name": "connected"
+                        }
+                    ]
+                }
+            },
+            {
+                "@type": [
+                    "Telemetry",
+                    "State"
+                ],
+                "displayName": {
+                    "en": "IoT Central Module State"
+                },
+                "name": "stModuleState",
+                "schema": {
+                    "@type": "Enum",
+                    "valueSchema": "string",
+                    "enumValues": [
+                        {
+                            "displayName": {
+                                "en": "inactive"
+                            },
+                            "enumValue": "inactive",
+                            "name": "inactive"
+                        },
+                        {
+                            "displayName": {
+                                "en": "active"
+                            },
+                            "enumValue": "active",
+                            "name": "active"
+                        }
+                    ]
+                }
+            },
+            {
+                "@type": [
+                    "Telemetry",
+                    "Event"
+                ],
+                "displayName": {
+                    "en": "Module Started"
+                },
+                "name": "evModuleStarted",
+                "schema": "string"
+            },
+            {
+                "@type": [
+                    "Telemetry",
+                    "Event"
+                ],
+                "displayName": {
+                    "en": "Module Stopped"
+                },
+                "name": "evModuleStopped",
+                "schema": "string"
+            },
+            {
+                "@type": [
+                    "Telemetry",
+                    "Event"
+                ],
+                "displayName": {
+                    "en": "Module Restart"
+                },
+                "name": "evModuleRestart",
+                "schema": "string"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Test OPCUA Endpoint"
+                },
+                "name": "cmTestOpcuaEndpoint"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Set OPCUA Endpoint"
+                },
+                "name": "cmBrowseOpcuaNodes",
+                "request": {
+                    "@type": "CommandPayload",
+                    "displayName": {
+                        "en": "Browse OPCUA Nodes Request"
+                    },
+                    "name": "BrowseOpcuaNodesRequest",
+                    "schema": {
+                        "@type": "Object",
+                        "displayName": {
+                            "en": "Browse OPCUA Nodes Request"
+                        },
+                        "fields": [
+                            {
+                                "displayName": {
+                                    "en": "StartNode"
+                                },
+                                "name": "StartNode",
+                                "schema": "string"
+                            },
+                            {
+                                "displayName": {
+                                    "en": "Depth"
+                                },
+                                "name": "Depth",
+                                "schema": "integer"
+                            },
+                            {
+                                "displayName": {
+                                    "en": "RequestedAttributes"
+                                },
+                                "name": "RequestedAttributes",
+                                "schema": "string"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Restart Gateway Module"
+                },
+                "name": "cmRestartGatewayModule",
+                "request": {
+                    "@type": "CommandPayload",
+                    "displayName": {
+                        "en": "Restart Gateway Module Request"
+                    },
+                    "name": "RestartGatewayModuleRequest",
+                    "schema": {
+                        "@type": "Object",
+                        "displayName": {
+                            "en": "Restart Gateway Module Request"
+                        },
+                        "fields": [
+                            {
+                                "displayName": {
+                                    "en": "Timeout"
+                                },
+                                "name": "timeout",
+                                "schema": "integer"
+                            }
+                        ]
+                    }
+                }
+            }
+        ]
+    }
+]
