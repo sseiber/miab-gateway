@@ -1,7 +1,11 @@
 import { service, inject } from 'spryly';
 import { Server } from '@hapi/hapi';
-import { DeviceMethodRequest, DeviceMethodResponse } from 'azure-iot-device';
+import {
+    DeviceMethodRequest,
+    DeviceMethodResponse
+} from 'azure-iot-device';
 import { IIotCentralPluginModule } from '../plugins/iotCentralModule';
+import { IBlobStoragePluginModuleOptions } from 'src/plugins/blobStorage';
 import { HealthState } from './health';
 import {
     arch as osArch,
@@ -15,6 +19,7 @@ import {
     freemem as osFreeMem,
     loadavg as osLoadAvg
 } from 'os';
+import { resolve as resolvePath } from 'path';
 import {
     gzipSync,
     gunzipSync
@@ -26,6 +31,8 @@ import {
     emptyOpcuaCredential,
     IBrowseNodesRequestParams
 } from './miabModels';
+import * as fse from 'fs-extra';
+import moment = require('moment');
 
 const ModuleName = 'MiabGatewayService';
 
@@ -83,8 +90,13 @@ export enum MiabGatewayCapability {
     evModuleStarted = 'evModuleStarted',
     evModuleStopped = 'evModuleStopped',
     evModuleRestart = 'evModuleRestart',
+    evFetchedOpcuaNodesStarted = 'evFetchedOpcuaNodesStarted',
+    evFetchedOpcuaNodesFinished = 'evFetchedOpcuaNodesFinished',
+    evFetchedOpcuaNodesUploaded = 'evFetchedOpcuaNodesUploaded',
     wpDebugTelemetry = 'wpDebugTelemetry',
     wpOpcuaEndpoint = 'wpOpcuaEndpoint',
+    wpBlobConnectionString = 'wpBlobConnectionString',
+    wpBlobContainerName = 'wpBlobContainerName',
     cmTestOpcuaEndpoint = 'cmTestOpcuaEndpoint',
     cmBrowseOpcuaNodes = 'cmBrowseOpcuaNodes',
     cmRestartGatewayModule = 'cmRestartGatewayModule'
@@ -93,6 +105,8 @@ export enum MiabGatewayCapability {
 interface IMiabGatewaySettings {
     [MiabGatewayCapability.wpDebugTelemetry]: boolean;
     [MiabGatewayCapability.wpOpcuaEndpoint]: OpcuaEndpoint;
+    [MiabGatewayCapability.wpBlobConnectionString]: string;
+    [MiabGatewayCapability.wpBlobContainerName]: string;
 }
 
 export interface IMiabGatewayUtility {
@@ -112,7 +126,9 @@ export class MiabGatewayService implements IMiabGatewayUtility {
     private healthCheckFailStreak = 0;
     private moduleSettings: IMiabGatewaySettings = {
         [MiabGatewayCapability.wpDebugTelemetry]: false,
-        [MiabGatewayCapability.wpOpcuaEndpoint]: emptyOpcuaCredential
+        [MiabGatewayCapability.wpOpcuaEndpoint]: emptyOpcuaCredential,
+        [MiabGatewayCapability.wpBlobConnectionString]: '',
+        [MiabGatewayCapability.wpBlobContainerName]: ''
     };
     public async init(): Promise<void> {
         this.server.log([ModuleName, 'info'], 'initialize');
@@ -175,6 +191,16 @@ export class MiabGatewayService implements IMiabGatewayUtility {
                         };
                         break;
 
+                    case MiabGatewayCapability.wpBlobConnectionString:
+                    case MiabGatewayCapability.wpBlobContainerName:
+                        patchedProperties[setting] = {
+                            value: this.moduleSettings[setting] = value || '',
+                            ac: 200,
+                            ad: 'completed',
+                            av: desiredChangedSettings['$version']
+                        };
+                        break;
+
                     default:
                         this.server.log([ModuleName, 'error'], `Received desired property change for unknown setting '${setting}'`);
                         break;
@@ -202,6 +228,20 @@ export class MiabGatewayService implements IMiabGatewayUtility {
 
         this.healthCheckRetries = Number(process.env.healthCheckRetries) || defaultHealthCheckRetries;
         this.healthState = this.iotCentralPluginModule.moduleClient ? HealthState.Good : HealthState.Critical;
+
+        const blobStorageOptions: IBlobStoragePluginModuleOptions = {
+            blobConnectionString: this.moduleSettings[MiabGatewayCapability.wpBlobConnectionString],
+            blobContainerName: this.moduleSettings[MiabGatewayCapability.wpBlobContainerName]
+        };
+
+        if (blobStorageOptions.blobConnectionString && blobStorageOptions.blobContainerName) {
+            if (!(await this.server.settings.app.blobStorage.configureBlobStorageClient(blobStorageOptions))) {
+                this.server.log([ModuleName, 'error'], `An error occurred while trying to configure the blob storage client`);
+            }
+        }
+        else {
+            this.server.log([ModuleName, 'info'], `All optional blob storage configuration values were not found`);
+        }
 
         const systemProperties = await this.getSystemProperties();
 
@@ -323,7 +363,7 @@ export class MiabGatewayService implements IMiabGatewayUtility {
             response.status = testConnectionResult.status;
 
             if (response.status !== 200) {
-                response.message = testConnectionResult?.payload?.error.message || `An error occurred while testing the opcua url`;
+                response.message = testConnectionResult?.payload?.error?.message || `An error occurred while testing the opcua url`;
 
                 this.server.log([ModuleName, 'error'], response.message);
             }
@@ -343,16 +383,20 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         return response;
     }
 
-    private async browseNodes(browseNodesRequestParams: IBrowseNodesRequestParams): Promise<IModuleCommandResponse> {
-        this.server.log([ModuleName, 'info'], `browseNodes`);
+    private async fetchNodes(browseNodesRequestParams: IBrowseNodesRequestParams): Promise<IModuleCommandResponse> {
+        this.server.log([ModuleName, 'info'], `fetchNodes`);
 
         const response: IModuleCommandResponse = {
-            status: 0,
+            status: 500,
             message: ``,
             payload: {}
         };
 
         try {
+            await this.iotCentralPluginModule.sendMeasurement({
+                [MiabGatewayCapability.evFetchedOpcuaNodesStarted]: `Starting node: ${browseNodesRequestParams.StartNode}, depth: ${browseNodesRequestParams.Depth}}`
+            }, IotcOutputName);
+
             const browseNodesResult = await this.iotCentralPluginModule.invokeDirectMethod(
                 this.moduleEnvironmentConfig.ompAdapterModuleId,
                 'BrowseNodes_v1',
@@ -367,33 +411,86 @@ export class MiabGatewayService implements IMiabGatewayUtility {
             response.status = browseNodesResult.status;
 
             if (browseNodesResult.status !== 200 || !browseNodesResult.payload?.JobId) {
-                response.message = browseNodesResult?.payload?.error.message || `Unknown error in the response from BrowseNodes - status: ${browseNodesResult.status}`;
+                response.message = browseNodesResult?.payload?.error?.message || `Unknown error in the response from BrowseNodes - status: ${browseNodesResult.status}`;
 
                 this.server.log([ModuleName, 'error'], response.message);
             }
             else {
-                const fetchBrowsedNodesRequestCompressed = gzipSync(JSON.stringify({
-                    JobId: browseNodesResult.payload.JobId,
-                    ContinuationToken: '1'
-                }));
+                const blobFilename = `fetchNodes-${moment.utc().format('YYYYMMDD-HHmmss')}.json`;
+                const fetchedNodesFilePath = resolvePath(this.server.settings.app.storageRootDirectory, blobFilename);
 
-                let fetchBrowsedNodesResult = await this.iotCentralPluginModule.invokeDirectMethod(
-                    this.moduleEnvironmentConfig.ompAdapterModuleId,
-                    'FetchBrowsedNodes_v1',
-                    {
-                        ContentLength: fetchBrowsedNodesRequestCompressed.length,
-                        Payload: fetchBrowsedNodesRequestCompressed.toString('base64')
+                let fetchBrowsedNodesResult;
+
+                do {
+                    const continuationToken = fetchBrowsedNodesResult?.payload?.continuationToken || '1';
+
+                    this.server.log([ModuleName, 'info'], `Calling fetchBrowsedNodes with JobId: ${browseNodesResult.payload.JobId} and ContinuationToken: ${continuationToken}`);
+
+                    fetchBrowsedNodesResult = await this.fetchBrowsedNodes(browseNodesResult.payload.JobId, continuationToken);
+
+                    fse.outputJsonSync(fetchedNodesFilePath, fetchBrowsedNodesResult.payload, { flags: 'a' });
+
+                    if (fetchBrowsedNodesResult?.payload?.continuationToken) {
+                        fetchBrowsedNodesResult = await this.fetchBrowsedNodes(browseNodesResult.payload.JobId, fetchBrowsedNodesResult.payload.continuationToken);
                     }
-                );
+                } while (fetchBrowsedNodesResult?.payload?.continuationToken);
+
+                await this.uploadFetchedNodesFile(fetchedNodesFilePath, blobFilename, 'application/json');
 
                 response.status = fetchBrowsedNodesResult.status;
+                response.message = fetchBrowsedNodesResult.message;
+                response.payload = fetchBrowsedNodesResult.payload;
+            }
+        }
+        catch (ex) {
+            response.status = 500;
+            response.message = `fetchNodes failed: ${ex.message}`;
 
-                if (fetchBrowsedNodesResult.status !== 202 || !fetchBrowsedNodesResult.payload?.RequestId) {
-                    response.message = fetchBrowsedNodesResult?.payload?.error.message || `Unknown error in the response from FetchBrowsedNodes - status: ${fetchBrowsedNodesResult.status}`;
+            this.server.log([ModuleName, 'error'], response.message);
+        }
 
-                    this.server.log([ModuleName, 'error'], response.message);
+        await this.iotCentralPluginModule.sendMeasurement({
+            [MiabGatewayCapability.evFetchedOpcuaNodesFinished]: response.status
+        }, IotcOutputName);
+
+        return response;
+    }
+
+    private async fetchBrowsedNodes(jobId: string, continuationToken: string): Promise<IModuleCommandResponse> {
+        this.server.log([ModuleName, 'info'], `fetchBrowsedNodes`);
+
+        const response: IModuleCommandResponse = {
+            status: 500,
+            message: ``,
+            payload: {}
+        };
+
+        try {
+            const fetchBrowsedNodesRequestCompressed = gzipSync(JSON.stringify({
+                JobId: jobId,
+                ContinuationToken: continuationToken
+            }));
+
+            let fetchBrowsedNodesResult = await this.iotCentralPluginModule.invokeDirectMethod(
+                this.moduleEnvironmentConfig.ompAdapterModuleId,
+                'FetchBrowsedNodes_v1',
+                {
+                    ContentLength: fetchBrowsedNodesRequestCompressed.length,
+                    Payload: fetchBrowsedNodesRequestCompressed.toString('base64')
                 }
-                else {
+            );
+
+            response.status = fetchBrowsedNodesResult.status;
+
+            if (fetchBrowsedNodesResult.status !== 202 || !fetchBrowsedNodesResult.payload?.RequestId) {
+                response.message = fetchBrowsedNodesResult?.payload?.error?.message || `Unknown error in the response from FetchBrowsedNodes - status: ${fetchBrowsedNodesResult.status}`;
+
+                this.server.log([ModuleName, 'error'], response.message);
+            }
+            else {
+                do {
+                    await sleep(1000);
+
                     fetchBrowsedNodesResult = await this.iotCentralPluginModule.invokeDirectMethod(
                         this.moduleEnvironmentConfig.ompAdapterModuleId,
                         'FetchBrowsedNodes_v1',
@@ -402,31 +499,55 @@ export class MiabGatewayService implements IMiabGatewayUtility {
                         }
                     );
 
-                    response.status = fetchBrowsedNodesResult.status;
+                    this.server.log([ModuleName, 'info'], `fetchBrowsedNodes returned status: ${fetchBrowsedNodesResult.status}`);
+                } while (fetchBrowsedNodesResult.status === 102);
 
-                    if (fetchBrowsedNodesResult.status !== 200 || !fetchBrowsedNodesResult.payload?.length) {
-                        response.message = fetchBrowsedNodesResult?.payload?.error.message || `Unknown error in the response from FetchBrowsedNodes - status: ${fetchBrowsedNodesResult.status}`;
+                if (fetchBrowsedNodesResult.status === 200
+                    && fetchBrowsedNodesResult.payload.Status === 200
+                    && fetchBrowsedNodesResult.payload?.Payload?.length) {
+                    const resultBuffer = gunzipSync(Buffer.from(fetchBrowsedNodesResult.payload.Payload, 'base64'));
 
-                        this.server.log([ModuleName, 'error'], response.message);
-                    }
-                    else {
-                        // @ts-ignore
-                        const foo = gunzipSync(fetchBrowsedNodesResult.payload);
-
-                        response.message = `BrowseNodes succeeded`;
-                        response.payload = fetchBrowsedNodesResult.payload;
-                    }
+                    response.message = `fetchBrowsedNodes succeeded`;
+                    response.payload = JSON.parse(resultBuffer.toString());
                 }
+                else {
+                    response.message = fetchBrowsedNodesResult?.payload?.error?.message || `Unknown error in the response from FetchBrowsedNodes - status: ${fetchBrowsedNodesResult.status}`;
+
+                    this.server.log([ModuleName, 'error'], response.message);
+                }
+
+                response.status = fetchBrowsedNodesResult.status;
             }
         }
         catch (ex) {
-            response.status = response.status || 400;
-            response.message = `BrowseNodes failed: ${ex.message}`;
+            response.status = 500;
+            response.message = `fetchBrowsedNodes failed: ${ex.message}`;
 
             this.server.log([ModuleName, 'error'], response.message);
         }
 
         return response;
+    }
+
+    private async uploadFetchedNodesFile(fetchedNodesFilePath: string, blobFilename: string, contentType: string): Promise<boolean> {
+        this.server.log([ModuleName, 'info'], `uploadFetchedNodesFile`);
+
+        let result = true;
+
+        try {
+            const blobUrl = await this.server.settings.app.blobStorage.putFileIntoBlobStorage(fetchedNodesFilePath, blobFilename, contentType);
+
+            await this.iotCentralPluginModule.sendMeasurement({
+                [MiabGatewayCapability.evFetchedOpcuaNodesUploaded]: blobUrl
+            }, IotcOutputName);
+        }
+        catch (ex) {
+            this.server.log([ModuleName, 'error'], `Error uploading file to blob storage: ${ex.message}`);
+
+            result = false;
+        }
+
+        return result;
     }
 
     private async restartModule(timeout: number, reason: string): Promise<void> {
@@ -481,11 +602,7 @@ export class MiabGatewayService implements IMiabGatewayUtility {
                     break;
 
                 case MiabGatewayCapability.cmBrowseOpcuaNodes:
-                    response = await this.browseNodes(commandRequest.payload);
-
-                    response.status = 200;
-                    response.message = 'Restart module request received';
-
+                    response = await this.fetchNodes(commandRequest.payload);
                     break;
 
                 case MiabGatewayCapability.cmRestartGatewayModule:

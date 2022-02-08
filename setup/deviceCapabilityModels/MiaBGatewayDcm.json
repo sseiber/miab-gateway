@@ -244,6 +244,24 @@
                         }
                     ]
                 }
+            },
+            {
+                "@type": "Property",
+                "displayName": {
+                    "en": "Blob Storage Connection String"
+                },
+                "name": "wpBlobConnectionString",
+                "writable": true,
+                "schema": "string"
+            },
+            {
+                "@type": "Property",
+                "displayName": {
+                    "en": "Blob Storage Container Name"
+                },
+                "name": "wpBlobContainerName",
+                "writable": true,
+                "schema": "string"
             }
         ]
     },
@@ -365,6 +383,39 @@
                     "en": "Module Restart"
                 },
                 "name": "evModuleRestart",
+                "schema": "string"
+            },
+            {
+                "@type": [
+                    "Telemetry",
+                    "Event"
+                ],
+                "displayName": {
+                    "en": "Fetched OPCUA Nodes Started"
+                },
+                "name": "evFetchedOpcuaNodesStarted",
+                "schema": "string"
+            },
+            {
+                "@type": [
+                    "Telemetry",
+                    "Event"
+                ],
+                "displayName": {
+                    "en": "Fetched OPCUA Nodes Finished"
+                },
+                "name": "evFetchedOpcuaNodesFinished",
+                "schema": "string"
+            },
+            {
+                "@type": [
+                    "Telemetry",
+                    "Event"
+                ],
+                "displayName": {
+                    "en": "Fetched OPCUA Nodes Uploaded"
+                },
+                "name": "evFetchedOpcuaNodesUploaded",
                 "schema": "string"
             },
             {

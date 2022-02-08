@@ -39,6 +39,23 @@
             "skipFiles": [
                 "<node_internals>/**"
             ]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Service",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/src/index.ts",
+            "smartStep": true,
+            "showAsyncStacks": true,
+            "sourceMaps": true,
+            "preLaunchTask": "ts-watch",
+            "outFiles": [
+                "${workspaceFolder}/dist/**/*.js"
+            ],
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
         }
     ]
 }
