@@ -155,7 +155,7 @@
                 "displayName": {
                     "en": "OPCUA Endpoint"
                 },
-                "name": "wpOpcuaEndpoint",
+                "name": "wpOpcEndpoint",
                 "writable": true,
                 "schema": {
                     "@type": "Object",
@@ -393,7 +393,7 @@
                 "displayName": {
                     "en": "Fetched OPCUA Nodes Started"
                 },
-                "name": "evFetchedOpcuaNodesStarted",
+                "name": "evFetchedOpcNodesStarted",
                 "schema": "string"
             },
             {
@@ -404,7 +404,7 @@
                 "displayName": {
                     "en": "Fetched OPCUA Nodes Finished"
                 },
-                "name": "evFetchedOpcuaNodesFinished",
+                "name": "evFetchedOpcNodesFinished",
                 "schema": "string"
             },
             {
@@ -415,7 +415,7 @@
                 "displayName": {
                     "en": "Fetched OPCUA Nodes Uploaded"
                 },
-                "name": "evFetchedOpcuaNodesUploaded",
+                "name": "evFetchedOpcNodesUploaded",
                 "schema": "string"
             },
             {
@@ -423,45 +423,110 @@
                 "displayName": {
                     "en": "Test OPCUA Endpoint"
                 },
-                "name": "cmTestOpcuaEndpoint"
+                "name": "cmTestOpcEndpoint"
             },
             {
                 "@type": "Command",
                 "displayName": {
-                    "en": "Set OPCUA Endpoint"
+                    "en": "Fetch OPCUA Nodes"
                 },
-                "name": "cmBrowseOpcuaNodes",
+                "name": "cmFetchOpcNodes",
                 "request": {
                     "@type": "CommandPayload",
                     "displayName": {
-                        "en": "Browse OPCUA Nodes Request"
+                        "en": "Fetch OPCUA Nodes Request"
                     },
-                    "name": "BrowseOpcuaNodesRequest",
+                    "name": "FetchOpcNodesRequest",
                     "schema": {
                         "@type": "Object",
                         "displayName": {
-                            "en": "Browse OPCUA Nodes Request"
+                            "en": "Fetch OPCUA Nodes Request"
                         },
                         "fields": [
                             {
                                 "displayName": {
                                     "en": "StartNode"
                                 },
-                                "name": "StartNode",
+                                "name": "startNode",
                                 "schema": "string"
                             },
                             {
                                 "displayName": {
                                     "en": "Depth"
                                 },
-                                "name": "Depth",
+                                "name": "depth",
                                 "schema": "integer"
                             },
                             {
                                 "displayName": {
                                     "en": "RequestedAttributes"
                                 },
-                                "name": "RequestedAttributes",
+                                "name": "requestedAttributes",
+                                "schema": "string"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Write OPCUA Values"
+                },
+                "name": "cmWriteOpcValues",
+                "request": {
+                    "@type": "CommandPayload",
+                    "displayName": {
+                        "en": "Write OPCUA Values Request"
+                    },
+                    "name": "WriteOpcValuesRequest",
+                    "schema": {
+                        "@type": "Object",
+                        "displayName": {
+                            "en": "Write OPCUA Values Request"
+                        },
+                        "fields": [
+                            {
+                                "displayName": {
+                                    "en": "Node Id"
+                                },
+                                "name": "nodeId",
+                                "schema": "string"
+                            },
+                            {
+                                "displayName": {
+                                    "en": "Value"
+                                },
+                                "name": "value",
+                                "schema": "string"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Read OPCUA Values"
+                },
+                "name": "cmReadOpcValues",
+                "request": {
+                    "@type": "CommandPayload",
+                    "displayName": {
+                        "en": "Read OPCUA Values Request"
+                    },
+                    "name": "ReadOpcValuesRequest",
+                    "schema": {
+                        "@type": "Object",
+                        "displayName": {
+                            "en": "Read OPCUA Values Request"
+                        },
+                        "fields": [
+                            {
+                                "displayName": {
+                                    "en": "Node Id"
+                                },
+                                "name": "nodeId",
                                 "schema": "string"
                             }
                         ]

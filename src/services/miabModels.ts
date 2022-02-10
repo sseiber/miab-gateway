@@ -14,7 +14,7 @@ export interface EndpointCredentials {
     Password: string;
 }
 
-export interface OpcuaEndpoint {
+export interface OpcEndpoint {
     Uri: string;
     SecurityMode: SecurityMode;
     Credentials: {
@@ -22,7 +22,7 @@ export interface OpcuaEndpoint {
     };
 }
 
-export const emptyOpcuaCredential = {
+export const emptyOpcCredential = {
     Uri: '',
     SecurityMode: SecurityMode.Lowest,
     Credentials: {
@@ -30,8 +30,39 @@ export const emptyOpcuaCredential = {
     }
 };
 
+export interface IWriteNodesRequestParams {
+    nodeId: string;
+    value: any;
+}
+
+export interface IReadNodesRequestParams {
+    nodeId: string;
+}
+
 export interface IBrowseNodesRequestParams {
-    StartNode: string;
-    Depth: number;
-    RequestedAttributes: string;
+    startNode: string;
+    depth: number;
+    requestedAttributes: string;
+}
+
+export interface OpcWriteNode {
+    NodeId: string;
+    DataValue: OpcDataValue;
+}
+
+export interface OpcDataValue {
+    Status: string;
+    Value: any;
+    SourceTimestamp: Date;
+    ServerTimestamp: Date;
+}
+
+export interface OpcReadNode {
+    NodeId: string;
+    DataValue: OpcDataValue;
+}
+
+export interface ReadValuesRequest {
+    Endpoint: OpcEndpoint;
+    OpcReadNodes: OpcReadNode[];
 }
