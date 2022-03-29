@@ -27,12 +27,13 @@ import {
 import * as Wreck from '@hapi/wreck';
 import { bind, sleep, fileStream } from '../utils';
 import {
-    OpcEndpoint,
-    emptyOpcCredential,
-    IBrowseNodesRequestParams,
-    IReadNodesRequestParams,
-    IWriteNodesRequestParams
-} from './miabModels';
+    ITestConnectionRequest,
+    IBrowseNodesRequest,
+    IWriteValuesRequest,
+    IReadValuesRequest,
+    IAddOrUpdateAssetRequest,
+    IRemoveAssetRequest
+} from './industrialConnectModels';
 import moment = require('moment');
 
 const ModuleName = 'MiabGatewayService';
@@ -95,19 +96,20 @@ export enum MiabGatewayCapability {
     evFetchedOpcNodesFinished = 'evFetchedOpcNodesFinished',
     evFetchedOpcNodesUploaded = 'evFetchedOpcNodesUploaded',
     wpDebugTelemetry = 'wpDebugTelemetry',
-    wpOpcEndpoint = 'wpOpcEndpoint',
     wpBlobConnectionString = 'wpBlobConnectionString',
     wpBlobContainerName = 'wpBlobContainerName',
-    cmTestOpcEndpoint = 'cmTestOpcEndpoint',
-    cmFetchOpcNodes = 'cmFetchOpcNodes',
-    cmWriteOpcValues = 'cmWriteOpcValues',
-    cmReadOpcValues = 'cmReadOpcValues',
+    cmTestConnection = 'cmTestConnection',
+    cmFetchNodes = 'cmFetchNodes',
+    cmWriteValues = 'cmWriteValues',
+    cmReadValues = 'cmReadValues',
+    cmAddOrUpdateAssets = 'cmAddOrUpdateAssets',
+    cmGetAllAssets = 'cmGetAllAssets',
+    cmRemoveAssets = 'cmRemoveAssets',
     cmRestartGatewayModule = 'cmRestartGatewayModule'
 }
 
 interface IMiabGatewaySettings {
     [MiabGatewayCapability.wpDebugTelemetry]: boolean;
-    [MiabGatewayCapability.wpOpcEndpoint]: OpcEndpoint;
     [MiabGatewayCapability.wpBlobConnectionString]: string;
     [MiabGatewayCapability.wpBlobContainerName]: string;
 }
@@ -129,7 +131,6 @@ export class MiabGatewayService implements IMiabGatewayUtility {
     private healthCheckFailStreak = 0;
     private moduleSettings: IMiabGatewaySettings = {
         [MiabGatewayCapability.wpDebugTelemetry]: false,
-        [MiabGatewayCapability.wpOpcEndpoint]: emptyOpcCredential,
         [MiabGatewayCapability.wpBlobConnectionString]: '',
         [MiabGatewayCapability.wpBlobContainerName]: ''
     };
@@ -174,20 +175,6 @@ export class MiabGatewayService implements IMiabGatewayUtility {
                     case MiabGatewayCapability.wpDebugTelemetry:
                         patchedProperties[setting] = {
                             value: this.moduleSettings[setting] = value || false,
-                            ac: 200,
-                            ad: 'completed',
-                            av: desiredChangedSettings['$version']
-                        };
-                        break;
-
-                    case MiabGatewayCapability.wpOpcEndpoint:
-                        this.moduleSettings[setting] = {
-                            ...this.moduleSettings[setting],
-                            ...(value || emptyOpcCredential)
-                        };
-
-                        patchedProperties[setting] = {
-                            value: this.moduleSettings[setting],
                             ac: 200,
                             ad: 'completed',
                             av: desiredChangedSettings['$version']
@@ -248,10 +235,13 @@ export class MiabGatewayService implements IMiabGatewayUtility {
 
         const systemProperties = await this.getSystemProperties();
 
-        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmTestOpcEndpoint, this.handleDirectMethod);
-        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmFetchOpcNodes, this.handleDirectMethod);
-        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmWriteOpcValues, this.handleDirectMethod);
-        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmReadOpcValues, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmTestConnection, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmFetchNodes, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmWriteValues, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmReadValues, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmAddOrUpdateAssets, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmGetAllAssets, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmRemoveAssets, this.handleDirectMethod);
         this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmRestartGatewayModule, this.handleDirectMethod);
 
         await this.iotCentralPluginModule.updateModuleProperties({
@@ -345,12 +335,8 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         }
     }
 
-    private verifyOpcEndpoint(): boolean {
-        return !!this.moduleSettings[MiabGatewayCapability.wpOpcEndpoint];
-    }
-
-    private async testOpcEndpoint(): Promise<IModuleCommandResponse> {
-        this.server.log([ModuleName, 'info'], `testOpcEndpoint - url: ${this.moduleSettings[MiabGatewayCapability.wpOpcEndpoint].Uri}`);
+    private async testConnection(testConnectionRequest: ITestConnectionRequest): Promise<IModuleCommandResponse> {
+        this.server.log([ModuleName, 'info'], `testConnection - url: ${testConnectionRequest.opcEndpoint.uri}`);
 
         const response: IModuleCommandResponse = {
             status: 500,
@@ -359,39 +345,25 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         };
 
         try {
-            if (!this.verifyOpcEndpoint()) {
-                response.message = `The OPCUA endpoint property is not set`;
-                this.server.log([ModuleName, 'error'], response.message);
-
-                return response;
-            }
-
-            const testConnectionResult = await this.iotCentralPluginModule.invokeDirectMethod(
-                this.moduleEnvironmentConfig.ompAdapterModuleId,
-                'TestConnection_v1',
-                {
-                    OpcEndpoint: this.moduleSettings[MiabGatewayCapability.wpOpcEndpoint]
-                },
-                10,
-                10
-            );
+            const testConnectionResult = await this.iotCentralPluginModule.invokeDirectMethod(this.moduleEnvironmentConfig.ompAdapterModuleId, 'TestConnection_v1', testConnectionRequest, 10, 10);
 
             response.status = testConnectionResult.status;
 
             if (response.status !== 200) {
-                response.message = testConnectionResult?.payload?.error?.message || `An error occurred while testing the opcua url`;
+                response.message = testConnectionResult?.payload?.error?.code || `An error occurred while testing the opcua url`;
+                response.payload = testConnectionResult?.payload?.error || {};
 
                 this.server.log([ModuleName, 'error'], response.message);
             }
             else {
-                response.message = `testOpcEndpoint succeeded for url: ${this.moduleSettings[MiabGatewayCapability.wpOpcEndpoint].Uri}`;
+                response.message = `testConnection succeeded for url: ${testConnectionRequest.opcEndpoint.uri}`;
 
                 this.server.log([ModuleName, 'info'], response.message);
             }
         }
         catch (ex) {
             response.status = 500;
-            response.message = `testOpcEndpoint failed: ${ex.message}`;
+            response.message = `testConnection failed: ${ex.message}`;
 
             this.server.log([ModuleName, 'error'], response.message);
         }
@@ -399,7 +371,7 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         return response;
     }
 
-    private async fetchNodes(browseNodesRequestParams: IBrowseNodesRequestParams): Promise<IModuleCommandResponse> {
+    private async fetchNodes(browseNodesRequest: IBrowseNodesRequest): Promise<IModuleCommandResponse> {
         this.server.log([ModuleName, 'info'], `fetchNodes`);
 
         const response: IModuleCommandResponse = {
@@ -409,38 +381,23 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         };
 
         try {
-            if (!this.verifyOpcEndpoint()) {
-                response.message = `The OPCUA endpoint property is not set`;
-                this.server.log([ModuleName, 'error'], response.message);
-
-                return response;
-            }
-
-            this.server.log([ModuleName, 'info'], `Starting node: ${browseNodesRequestParams.startNode}, depth: ${browseNodesRequestParams.depth}`);
+            this.server.log([ModuleName, 'info'], `Starting node: ${browseNodesRequest.startNode}, depth: ${browseNodesRequest.depth}`);
 
             await this.iotCentralPluginModule.sendMeasurement({
-                [MiabGatewayCapability.evFetchedOpcNodesStarted]: `Starting node: ${browseNodesRequestParams.startNode}, depth: ${browseNodesRequestParams.depth}`
+                [MiabGatewayCapability.evFetchedOpcNodesStarted]: `Starting node: ${browseNodesRequest.startNode}, depth: ${browseNodesRequest.depth}`
             }, IotcOutputName);
 
             this.server.log([ModuleName, 'info'], `Calling BrowseNodes_v1`);
 
-            const browseNodesResult = await this.iotCentralPluginModule.invokeDirectMethod(
-                this.moduleEnvironmentConfig.ompAdapterModuleId,
-                'BrowseNodes_v1',
-                {
-                    OpcEndpoint: this.moduleSettings[MiabGatewayCapability.wpOpcEndpoint],
-                    StartNode: browseNodesRequestParams.startNode,
-                    Depth: browseNodesRequestParams.depth,
-                    RequestedAttributes: (browseNodesRequestParams?.requestedAttributes || '').split(',')
-                }
-            );
+            const browseNodesResult = await this.iotCentralPluginModule.invokeDirectMethod(this.moduleEnvironmentConfig.ompAdapterModuleId, 'BrowseNodes_v1', browseNodesRequest);
 
             response.status = browseNodesResult.status;
 
             this.server.log([ModuleName, 'info'], `BrowseNodes_v1 returned status: ${browseNodesResult.status}`);
 
             if (browseNodesResult.status !== 200 || !browseNodesResult.payload?.JobId) {
-                response.message = browseNodesResult?.payload?.error?.message || `Unknown error in the response from fetchNodes - status: ${browseNodesResult.status}`;
+                response.message = browseNodesResult?.payload?.error?.code || `Unknown error in the response from fetchNodes - status: ${browseNodesResult.status}`;
+                response.payload = browseNodesResult?.payload?.error;
 
                 this.server.log([ModuleName, 'error'], response.message);
             }
@@ -450,30 +407,58 @@ export class MiabGatewayService implements IMiabGatewayUtility {
 
                 let fetchBrowsedNodesResult;
 
-                const fetchedNodesFileStream = fileStream(fetchedNodesFilePath);
-                fetchedNodesFileStream.create();
+                const fetchedNodesFileWriteStream = fileStream(fetchedNodesFilePath);
+                fetchedNodesFileWriteStream.create();
+                await fetchedNodesFileWriteStream.write('[');
 
-                do {
-                    const continuationToken = fetchBrowsedNodesResult?.payload?.continuationToken || '1';
+                let totalSize = 0;
+                const fetchedNodesUploadContext = await this.server.settings.app.largePayload.createUploadTelemetryContext(true, blobFilename);
 
-                    this.server.log([ModuleName, 'info'], `Calling fetchBrowsedNodes with JobId: ${browseNodesResult.payload.JobId} and ContinuationToken: ${continuationToken}`);
+                try {
+                    do {
+                        const continuationToken = fetchBrowsedNodesResult?.payload?.continuationToken || '1';
 
-                    fetchBrowsedNodesResult = await this.fetchBrowsedNodes(browseNodesResult.payload.JobId, continuationToken);
+                        this.server.log([ModuleName, 'info'], `Calling fetchBrowsedNodes with JobId: ${browseNodesResult.payload.JobId} and ContinuationToken: ${continuationToken}`);
 
-                    this.server.log([ModuleName, 'info'], `fetchBrowsedNodes returned status: ${fetchBrowsedNodesResult.status}`);
+                        fetchBrowsedNodesResult = await this.fetchBrowsedNodes(browseNodesResult.payload.JobId, continuationToken);
 
-                    if (fetchBrowsedNodesResult.status === 200 && fetchBrowsedNodesResult?.payload?.nodes) {
-                        this.server.log([ModuleName, 'info'], `fetchBrowsedNodes returned ${fetchBrowsedNodesResult.payload.nodes.length} nodes`);
+                        this.server.log([ModuleName, 'info'], `fetchBrowsedNodes returned status: ${fetchBrowsedNodesResult.status}`);
 
-                        await fetchedNodesFileStream.writeJson(fetchBrowsedNodesResult.payload.nodes);
-                    }
-                } while (fetchBrowsedNodesResult.status === 200 && fetchBrowsedNodesResult?.payload?.continuationToken);
+                        if (fetchBrowsedNodesResult.status === 200 && fetchBrowsedNodesResult?.payload?.nodes) {
+                            this.server.log([ModuleName, 'info'], `fetchBrowsedNodes returned ${fetchBrowsedNodesResult.payload.nodes.length} nodes`);
 
-                await fetchedNodesFileStream.close();
+                            let iNode = 0;
+                            for (const node of fetchBrowsedNodesResult.payload.nodes) {
+                                await fetchedNodesFileWriteStream.writeJson(node);
 
-                if (fetchBrowsedNodesResult.status === 200) {
-                    await this.uploadFetchedNodesFile(fetchedNodesFilePath, blobFilename, 'application/json');
+                                if (iNode++ < fetchBrowsedNodesResult.payload.nodes.length) {
+                                    await fetchedNodesFileWriteStream.write(',');
+                                }
+                            }
+
+                            // returned compressed payload is a base64 string
+                            totalSize += (fetchBrowsedNodesResult.payload.compressedPayload as string).length;
+                            await this.server.settings.app.largePayload.sendUploadTelemetryPayload(fetchedNodesUploadContext, fetchBrowsedNodesResult.payload.compressedPayload);
+                        }
+
+                        response.status = fetchBrowsedNodesResult.status;
+                    } while (fetchBrowsedNodesResult.status === 200 && fetchBrowsedNodesResult?.payload?.continuationToken);
                 }
+                catch (ex) {
+                    response.status = fetchBrowsedNodesResult.status || 500;
+                    response.message = `Error while fetching node chunks: ${ex.message}`;
+
+                    this.server.log([ModuleName, 'error'], response.message);
+                }
+                finally {
+                    await fetchedNodesFileWriteStream.write(']');
+                    await fetchedNodesFileWriteStream.close();
+                    await this.server.settings.app.largePayload.closeUploadTelemetryContext(fetchedNodesUploadContext, totalSize, response.status);
+                }
+
+                // if (fetchBrowsedNodesResult.status === 200) {
+                //     await this.uploadFetchedNodesFile(fetchedNodesFilePath, blobFilename, 'application/json');
+                // }
 
                 response.status = fetchBrowsedNodesResult.status;
                 response.message = fetchBrowsedNodesResult.message;
@@ -521,6 +506,7 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         return response;
     }
 
+    // @ts-ignore
     private async uploadFetchedNodesFile(fetchedNodesFilePath: string, blobFilename: string, contentType: string): Promise<boolean> {
         this.server.log([ModuleName, 'info'], `uploadFetchedNodesFile`);
 
@@ -542,8 +528,8 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         return result;
     }
 
-    private async writeOpcValues(writeNodesRequestParams: IWriteNodesRequestParams): Promise<IModuleCommandResponse> {
-        this.server.log([ModuleName, 'info'], `writeOpcValues`);
+    private async writeValues(writeNodesRequests: IWriteValuesRequest[]): Promise<IModuleCommandResponse> {
+        this.server.log([ModuleName, 'info'], `writeValues`);
 
         const response: IModuleCommandResponse = {
             status: 500,
@@ -552,30 +538,13 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         };
 
         try {
-            if (!this.verifyOpcEndpoint()) {
-                response.message = `The OPCUA endpoint property is not set`;
-                this.server.log([ModuleName, 'error'], response.message);
-
-                return response;
-            }
-
-            const writeValuesResult = await this.chunkRequest('WriteValues_v1', [
-                {
-                    OpcEndpoint: this.moduleSettings[MiabGatewayCapability.wpOpcEndpoint],
-                    OpcWriteNodes: [
-                        {
-                            NodeId: writeNodesRequestParams.nodeId,
-                            DataValue: JSON.parse(writeNodesRequestParams.value)
-                        }
-                    ]
-                }
-            ]);
+            const writeValuesResult = await this.chunkRequest('WriteValues_v1', writeNodesRequests);
 
             Object.assign(response, writeValuesResult);
         }
         catch (ex) {
             response.status = 500;
-            response.message = `writeOpcValues failed: ${ex.message}`;
+            response.message = `writeValues failed: ${ex.message}`;
 
             this.server.log([ModuleName, 'error'], response.message);
         }
@@ -583,8 +552,8 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         return response;
     }
 
-    private async readOpcValues(readNodesRequestParams: IReadNodesRequestParams): Promise<IModuleCommandResponse> {
-        this.server.log([ModuleName, 'info'], `readOpcValues`);
+    private async readValues(readNodesRequests: IReadValuesRequest[]): Promise<IModuleCommandResponse> {
+        this.server.log([ModuleName, 'info'], `readValues`);
 
         const response: IModuleCommandResponse = {
             status: 500,
@@ -593,29 +562,86 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         };
 
         try {
-            if (!this.verifyOpcEndpoint()) {
-                response.message = `The OPCUA endpoint property is not set`;
-                this.server.log([ModuleName, 'error'], response.message);
-
-                return response;
-            }
-
-            const readValuesResult = await this.chunkRequest('ReadValues_v1', [
-                {
-                    OpcEndpoint: this.moduleSettings[MiabGatewayCapability.wpOpcEndpoint],
-                    OpcReadNodes: [
-                        {
-                            NodeId: readNodesRequestParams.nodeId
-                        }
-                    ]
-                }
-            ]);
+            const readValuesResult = await this.chunkRequest('ReadValues_v1', readNodesRequests);
 
             Object.assign(response, readValuesResult);
         }
         catch (ex) {
             response.status = 500;
-            response.message = `readOpcValues failed: ${ex.message}`;
+            response.message = `readValues failed: ${ex.message}`;
+
+            this.server.log([ModuleName, 'error'], response.message);
+        }
+
+        return response;
+    }
+
+    private async addOrUpdateAssets(addOrUpdateAssetsRequests: IAddOrUpdateAssetRequest[]): Promise<IModuleCommandResponse> {
+        this.server.log([ModuleName, 'info'], `addOrUpdateAssets`);
+
+        const response: IModuleCommandResponse = {
+            status: 500,
+            message: ``,
+            payload: {}
+        };
+
+        try {
+            const readValuesResult = await this.chunkRequest('AddOrUpdateAssets_v1', addOrUpdateAssetsRequests);
+
+            Object.assign(response, readValuesResult);
+        }
+        catch (ex) {
+            response.status = 500;
+            response.message = `addOrUpdateAssets failed: ${ex.message}`;
+
+            this.server.log([ModuleName, 'error'], response.message);
+        }
+
+        return response;
+    }
+
+    private async getAllAssets(): Promise<IModuleCommandResponse> {
+        this.server.log([ModuleName, 'info'], `getAllAssets`);
+
+        const response: IModuleCommandResponse = {
+            status: 500,
+            message: ``,
+            payload: {}
+        };
+
+        try {
+            const getAllAssetsResult = await this.chunkRequest('GetAllAssets_v1', []);
+
+            Object.assign(response, getAllAssetsResult);
+        }
+        catch (ex) {
+            response.status = 500;
+            response.message = `getAllAssets failed: ${ex.message}`;
+
+            this.server.log([ModuleName, 'error'], response.message);
+        }
+
+
+        return response;
+    }
+
+    private async removeAssets(assetIds: IRemoveAssetRequest[]): Promise<IModuleCommandResponse> {
+        this.server.log([ModuleName, 'info'], `removeAssets`);
+
+        const response: IModuleCommandResponse = {
+            status: 500,
+            message: ``,
+            payload: {}
+        };
+
+        try {
+            const removeAssetsResult = await this.chunkRequest('RemoveAssets_v1', assetIds);
+
+            Object.assign(response, removeAssetsResult);
+        }
+        catch (ex) {
+            response.status = 500;
+            response.message = `removeAssets failed: ${ex.message}`;
 
             this.server.log([ModuleName, 'error'], response.message);
         }
@@ -647,7 +673,8 @@ export class MiabGatewayService implements IMiabGatewayUtility {
             response.status = chunkResult.status;
 
             if (chunkResult.status !== 202 || !chunkResult.payload?.RequestId) {
-                response.message = chunkResult?.payload?.error?.message || `Unknown error in the chunked response from ${methodName} - status: ${chunkResult.status}`;
+                response.message = chunkResult?.payload?.error?.code || `Unknown error in the chunked response from ${methodName} - status: ${chunkResult.status}`;
+                response.payload = chunkResult?.payload?.error;
 
                 this.server.log([ModuleName, 'error'], response.message);
             }
@@ -669,13 +696,15 @@ export class MiabGatewayService implements IMiabGatewayUtility {
                 if (chunkResult.status === 200
                     && chunkResult.payload.Status === 200
                     && chunkResult.payload?.Payload?.length) {
-                    const resultBuffer = gunzipSync(Buffer.from(chunkResult.payload.Payload, 'base64'));
-
                     response.message = `${methodName} succeeded`;
-                    response.payload = JSON.parse(resultBuffer.toString());
+                    response.payload = {
+                        compressedPayload: chunkResult.payload.Payload,
+                        ...JSON.parse(gunzipSync(Buffer.from(chunkResult.payload.Payload, 'base64')).toString())
+                    };
                 }
                 else {
-                    response.message = chunkResult?.payload?.error?.message || `Unknown error in the chunked response from ${methodName} - status: ${chunkResult.status}`;
+                    response.message = chunkResult?.payload?.error?.code || `Unknown error in the chunked response from ${methodName} - status: ${chunkResult.status}`;
+                    response.payload = chunkResult?.payload?.error;
 
                     this.server.log([ModuleName, 'error'], response.message);
                 }
@@ -740,21 +769,34 @@ export class MiabGatewayService implements IMiabGatewayUtility {
 
         try {
             switch (commandRequest.methodName) {
-                case MiabGatewayCapability.cmTestOpcEndpoint:
-                    response = await this.testOpcEndpoint();
+                case MiabGatewayCapability.cmTestConnection:
+                    response = await this.testConnection(commandRequest.payload);
                     break;
 
-                case MiabGatewayCapability.cmFetchOpcNodes:
+                case MiabGatewayCapability.cmFetchNodes:
                     response = await this.fetchNodes(commandRequest.payload);
                     break;
 
-                case MiabGatewayCapability.cmWriteOpcValues:
-                    response = await this.writeOpcValues(commandRequest.payload);
+                case MiabGatewayCapability.cmWriteValues:
+                    response = await this.writeValues(commandRequest.payload);
                     break;
 
-                case MiabGatewayCapability.cmReadOpcValues:
-                    response = await this.readOpcValues(commandRequest.payload);
+                case MiabGatewayCapability.cmReadValues:
+                    response = await this.readValues(commandRequest.payload);
                     break;
+
+                case MiabGatewayCapability.cmAddOrUpdateAssets:
+                    response = await this.addOrUpdateAssets(commandRequest.payload);
+                    break;
+
+                case MiabGatewayCapability.cmGetAllAssets:
+                    response = await this.getAllAssets();
+                    break;
+
+                case MiabGatewayCapability.cmRemoveAssets:
+                    response = await this.removeAssets(commandRequest.payload);
+                    break;
+
 
                 case MiabGatewayCapability.cmRestartGatewayModule:
                     await this.restartModule((commandRequest?.payload as IRestartGatewayModuleCommandRequestParams)?.timeout || 0, 'RestartModule command received');

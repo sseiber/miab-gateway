@@ -50,7 +50,7 @@ export interface IIotCentralPluginModule {
 export const iotCentralPluginModule: Plugin<any> = {
     name: 'IotCentralPluginModule',
 
-    register: async (server: Server, options: IIotCentralPluginModuleOptions) => {
+    register: async (server: Server, options: IIotCentralPluginModuleOptions): Promise<void> => {
         server.log([PluginName, 'info'], 'register');
 
         if (!options.debugTelemetry) {
@@ -208,13 +208,11 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
             }
 
             directMethodResult.status = response.status;
+            directMethodResult.payload = response.payload || {};
 
             if (response.status < 200 || response.status > 299) {
                 // throw new Error(`(from invokeMethod) ${response.payload.error?.message}`);
                 this.server.log([ModuleName, 'error'], `Error executing directMethod ${methodName} on module ${moduleId}, status: ${response.status}`);
-            }
-            else {
-                directMethodResult.payload = response.payload;
             }
         }
         catch (ex) {

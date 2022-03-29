@@ -10,12 +10,6 @@ import * as fse from 'fs-extra';
 import * as _get from 'lodash.get';
 import * as _set from 'lodash.set';
 
-export interface IConfig {
-    get(scope: string, property?: string): Promise<any>;
-    set(scope: string, property: any, value?: any): Promise<void>;
-    clear(scope: string): Promise<boolean>;
-}
-
 declare module '@hapi/hapi' {
     interface ServerOptionsApp {
         config?: IConfig;
@@ -23,35 +17,39 @@ declare module '@hapi/hapi' {
 }
 
 const ROOT = '__ROOT__';
-const PluginName = 'ConfigPlugin';
-const ModuleName = 'ConfigModule';
+const ModuleName = 'ConfigPluginModule';
+
+export interface IConfig {
+    get(scope: string, property?: string): Promise<any>;
+    set(scope: string, property: any, value?: any): Promise<void>;
+    clear(scope: string): Promise<boolean>;
+}
 
 export class ConfigPlugin implements HapiPlugin {
     @inject('$server')
     private server: Server;
 
     public async init(): Promise<void> {
-        this.server.log([PluginName, 'info'], `init`);
+        this.server.log([ModuleName, 'info'], `init`);
     }
 
-    // @ts-ignore (options)
     public async register(server: Server, options: any): Promise<void> {
-        server.log([PluginName, 'info'], 'register');
+        server.log([ModuleName, 'info'], 'register');
 
         try {
-            const plugin = new ConfigModule(server, options);
+            const plugin = new ConfigPluginModule(server, options);
 
             await plugin.initialize();
 
             server.settings.app.config = plugin;
         }
         catch (ex) {
-            server.log([PluginName, 'error'], `Error while registering : ${ex.message}`);
+            server.log([ModuleName, 'error'], `Error while registering : ${ex.message}`);
         }
     }
 }
 
-class ConfigModule implements IConfig {
+class ConfigPluginModule implements IConfig {
     private server: Server;
     private storageDirectory: string;
 

@@ -7,6 +7,14 @@ import {
 } from '@azure/storage-blob';
 import { Readable } from 'stream';
 
+declare module '@hapi/hapi' {
+    interface ServerOptionsApp {
+        blobStorage?: IBlobStoragePluginModule;
+    }
+}
+
+const ModuleName = 'BlobStoragePluginModule';
+
 export interface IBlobStoragePluginModuleOptions {
     blobConnectionString: string;
     blobContainerName: string;
@@ -19,14 +27,6 @@ export interface IBlobStoragePluginModule {
     uploadBase64ImageToBlobStorageContainer(base64Data: string, blobName: string): Promise<string>;
 }
 
-declare module '@hapi/hapi' {
-    interface ServerOptionsApp {
-        blobStorage?: IBlobStoragePluginModule;
-    }
-}
-
-const ModuleName = 'BlobStoragePluginModule';
-
 export class BlobStoragePlugin implements HapiPlugin {
     @inject('$server')
     private server: Server;
@@ -35,8 +35,7 @@ export class BlobStoragePlugin implements HapiPlugin {
         this.server.log([ModuleName, 'info'], `init`);
     }
 
-    // @ts-ignore (options)
-    public async register(server: Server, options: any): Promise<void> {
+    public async register(server: Server, _options: IBlobStoragePluginModuleOptions): Promise<void> {
         server.log([ModuleName, 'info'], 'register');
 
         try {

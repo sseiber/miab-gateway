@@ -2,7 +2,7 @@ import * as fse from 'fs-extra';
 
 class FileStream {
     public filePath: string;
-    public stream: fse.writeStream;
+    public stream: fse.WriteStream;
 
     constructor(filePath: string) {
         this.filePath = filePath;

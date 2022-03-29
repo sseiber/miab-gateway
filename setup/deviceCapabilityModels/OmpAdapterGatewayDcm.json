@@ -1,0 +1,145 @@
+[
+    {
+        "@id": "dtmi:com:azureiot:model:IIoTAdapterGateway;1",
+        "@context": [
+            "dtmi:iotcentral:context;2",
+            "dtmi:dtdl:context;2"
+        ],
+        "@type": "Interface",
+        "displayName": {
+            "en": "Industrial IoT Adapter Gateway Model"
+        },
+        "contents": [
+            {
+                "@context": [
+                    "dtmi:iotcentral:context;2",
+                    "dtmi:dtdl:context;2"
+                ],
+                "@id": "dtmi:com:azureiot:model:IIoTAdapterGateway:ompadapter;1",
+                "@type": [
+                    "Relationship",
+                    "EdgeModule"
+                ],
+                "displayName": {
+                    "en": "Industrial IoT Adapter Gateway Module"
+                },
+                "maxMultiplicity": 1,
+                "name": "ompadapter",
+                "target": [
+                    "dtmi:com:azureiot:ompadapter;1"
+                ]
+            }
+        ]
+    },
+    {
+        "@id": "dtmi:com:azureiot:ompadapter;1",
+        "@type": "Interface",
+        "contents": [
+            {
+                "@id": "dtmi:com:azureiot:ompadapter:rel;1",
+                "@type": [
+                    "Relationship",
+                    "GatewayDevice"
+                ],
+                "displayName": {
+                    "en": "rel"
+                },
+                "name": "rel",
+                "target": []
+            }
+        ],
+        "displayName": {
+            "en": "Industrial IoT Adapter Gateway Module"
+        },
+        "extends": [
+            "dtmi:com:azureiot:ompadapter:IIoTAdapterInterface;1"
+        ],
+        "@context": [
+            "dtmi:iotcentral:context;2",
+            "dtmi:dtdl:context;2"
+        ]
+    },
+    {
+        "@context": [
+            "dtmi:iotcentral:context;2",
+            "dtmi:dtdl:context;2"
+        ],
+        "@id": "dtmi:com:azureiot:ompadapter:IIoTAdapterInterface;1",
+        "@type": "Interface",
+        "displayName": {
+            "en": "Industrial IoT Adapter Interface"
+        },
+        "contents": [
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Add or Update Assets"
+                },
+                "name": "AddOrUpdateAssets_v1"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Get All Assets"
+                },
+                "name": "GetAllAssets_v1"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Remove Assets"
+                },
+                "name": "RemoveAssets_v1"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Shutdown"
+                },
+                "name": "Shutdown_v1"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Shutdown"
+                },
+                "name": "GenerateDtdl_v1"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Test Connection"
+                },
+                "name": "TestConnection_v1"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Write Values"
+                },
+                "name": "WriteValues_v1"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Read Values"
+                },
+                "name": "ReadValues_v1"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Browse Nodes"
+                },
+                "name": "BrowseNodes_v1"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Fetch Browsed Nodes"
+                },
+                "name": "FetchBrowsedNodes_v1"
+            }
+        ]
+    }
+]

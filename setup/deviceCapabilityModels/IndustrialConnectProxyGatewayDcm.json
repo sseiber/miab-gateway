@@ -1,13 +1,13 @@
 [
     {
-        "@id": "dtmi:com:azureiot:model:MiaBGateway;1",
+        "@id": "dtmi:com:azureiot:model:IndCnctProxyGw;1",
         "@context": [
             "dtmi:iotcentral:context;2",
             "dtmi:dtdl:context;2"
         ],
         "@type": "Interface",
         "displayName": {
-            "en": "Manufacturing in a Box Gateway Model"
+            "en": "Industrial Connect Proxy Gateway Model"
         },
         "contents": [
             {
@@ -15,28 +15,28 @@
                     "dtmi:iotcentral:context;2",
                     "dtmi:dtdl:context;2"
                 ],
-                "@id": "dtmi:com:azureiot:model:MiaBGateway:MiaBGatewayModule;1",
+                "@id": "dtmi:com:azureiot:model:IndCnctProxyGw:IndCnctProxyGwModule;1",
                 "@type": [
                     "Relationship",
                     "EdgeModule"
                 ],
                 "displayName": {
-                    "en": "Manufacturing in a Box Gateway Module"
+                    "en": "Industrial Connect Proxy Gateway Module"
                 },
                 "maxMultiplicity": 1,
-                "name": "MiaBGatewayModule",
+                "name": "IndCnctProxyGwModule",
                 "target": [
-                    "dtmi:com:azureiot:MiaBGatewayModule;1"
+                    "dtmi:com:azureiot:IndCnctProxyGwModule;1"
                 ]
             }
         ]
     },
     {
-        "@id": "dtmi:com:azureiot:MiaBGatewayModule;1",
+        "@id": "dtmi:com:azureiot:IndCnctProxyGwModule;1",
         "@type": "Interface",
         "contents": [
             {
-                "@id": "dtmi:com:azureiot:MiaBGatewayModule:rel;1",
+                "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:rel;1",
                 "@type": [
                     "Relationship",
                     "GatewayDevice"
@@ -49,12 +49,12 @@
             }
         ],
         "displayName": {
-            "en": "Manufacturing in a Box Gateway Module"
+            "en": "Industrial Connect Proxy Gateway Module"
         },
         "extends": [
-            "dtmi:com:azureiot:MiaBGatewayModule:DeviceInformation;1",
-            "dtmi:com:azureiot:MiaBGatewayModule:MiaBSettings;1",
-            "dtmi:com:azureiot:MiaBGatewayModule:MiaBInterface;1"
+            "dtmi:com:azureiot:IndCnctProxyGwModule:DeviceInformation;1",
+            "dtmi:com:azureiot:IndCnctProxyGwModule:MiaBSettings;1",
+            "dtmi:com:azureiot:IndCnctProxyGwModule:MiaBInterface;1"
         ],
         "@context": [
             "dtmi:iotcentral:context;2",
@@ -66,10 +66,10 @@
             "dtmi:iotcentral:context;2",
             "dtmi:dtdl:context;2"
         ],
-        "@id": "dtmi:com:azureiot:MiaBGatewayModule:DeviceInformation;1",
+        "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:DeviceInformation;1",
         "@type": "Interface",
         "displayName": {
-            "en": "Manufacturing in a Box Device Information Interface"
+            "en": "Industrial Connect Proxy Device Information Interface"
         },
         "contents": [
             {
@@ -135,10 +135,10 @@
             "dtmi:iotcentral:context;2",
             "dtmi:dtdl:context;2"
         ],
-        "@id": "dtmi:com:azureiot:MiaBGatewayModule:MiaBSettings;1",
+        "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:MiaBSettings;1",
         "@type": "Interface",
         "displayName": {
-            "en": "Manufacturing in a Box Settings"
+            "en": "Industrial Connect Proxy Settings"
         },
         "contents": [
             {
@@ -149,101 +149,6 @@
                 "name": "wpDebugTelemetry",
                 "writable": true,
                 "schema": "boolean"
-            },
-            {
-                "@type": "Property",
-                "displayName": {
-                    "en": "OPCUA Endpoint"
-                },
-                "name": "wpOpcEndpoint",
-                "writable": true,
-                "schema": {
-                    "@type": "Object",
-                    "displayName": {
-                        "en": "OPCUA Endpoint"
-                    },
-                    "fields": [
-                        {
-                            "displayName": {
-                                "en": "Uri"
-                            },
-                            "name": "Uri",
-                            "schema": "string"
-                        },
-                        {
-                            "displayName": {
-                                "en": "SecurityMode"
-                            },
-                            "name": "SecurityMode",
-                            "schema": {
-                                "@type": "Enum",
-                                "displayName": {
-                                    "en": "Enum"
-                                },
-                                "enumValues": [
-                                    {
-                                        "displayName": {
-                                            "en": "Lowest"
-                                        },
-                                        "enumValue": "Lowest",
-                                        "name": "Lowest"
-                                    },
-                                    {
-                                        "displayName": {
-                                            "en": "Best"
-                                        },
-                                        "enumValue": "Best",
-                                        "name": "Best"
-                                    }
-                                ],
-                                "valueSchema": "string"
-                            }
-                        },
-                        {
-                            "displayName": {
-                                "en": "Credentials"
-                            },
-                            "name": "Credentials",
-                            "schema": {
-                                "@type": "Object",
-                                "displayName": {
-                                    "en": "Credentials"
-                                },
-                                "fields": [
-                                    {
-                                        "displayName": {
-                                            "en": "CredentialType"
-                                        },
-                                        "name": "CredentialType",
-                                        "schema": {
-                                            "@type": "Enum",
-                                            "displayName": {
-                                                "en": "Enum"
-                                            },
-                                            "enumValues": [
-                                                {
-                                                    "displayName": {
-                                                        "en": "Anonymous"
-                                                    },
-                                                    "enumValue": "Anonymous",
-                                                    "name": "Anonymous"
-                                                },
-                                                {
-                                                    "displayName": {
-                                                        "en": "Username"
-                                                    },
-                                                    "enumValue": "Username",
-                                                    "name": "Username"
-                                                }
-                                            ],
-                                            "valueSchema": "string"
-                                        }
-                                    }
-                                ]
-                            }
-                        }
-                    ]
-                }
             },
             {
                 "@type": "Property",
@@ -270,10 +175,10 @@
             "dtmi:iotcentral:context;2",
             "dtmi:dtdl:context;2"
         ],
-        "@id": "dtmi:com:azureiot:MiaBGatewayModule:MiaBInterface;1",
+        "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:MiaBInterface;1",
         "@type": "Interface",
         "displayName": {
-            "en": "Manufacturing in a Box Interface"
+            "en": "Industrial Connect Proxy Interface"
         },
         "contents": [
             {
@@ -391,7 +296,7 @@
                     "Event"
                 ],
                 "displayName": {
-                    "en": "Fetched OPCUA Nodes Started"
+                    "en": "Fetched OPC Nodes Started"
                 },
                 "name": "evFetchedOpcNodesStarted",
                 "schema": "string"
@@ -402,7 +307,7 @@
                     "Event"
                 ],
                 "displayName": {
-                    "en": "Fetched OPCUA Nodes Finished"
+                    "en": "Fetched OPC Nodes Finished"
                 },
                 "name": "evFetchedOpcNodesFinished",
                 "schema": "string"
@@ -413,7 +318,7 @@
                     "Event"
                 ],
                 "displayName": {
-                    "en": "Fetched OPCUA Nodes Uploaded"
+                    "en": "Fetched OPC Nodes Uploaded"
                 },
                 "name": "evFetchedOpcNodesUploaded",
                 "schema": "string"
@@ -421,117 +326,51 @@
             {
                 "@type": "Command",
                 "displayName": {
-                    "en": "Test OPCUA Endpoint"
+                    "en": "Test OPC Server Connection"
                 },
-                "name": "cmTestOpcEndpoint"
+                "name": "cmTestConnection"
             },
             {
                 "@type": "Command",
                 "displayName": {
-                    "en": "Fetch OPCUA Nodes"
+                    "en": "Fetch OPC Nodes"
                 },
-                "name": "cmFetchOpcNodes",
-                "request": {
-                    "@type": "CommandPayload",
-                    "displayName": {
-                        "en": "Fetch OPCUA Nodes Request"
-                    },
-                    "name": "FetchOpcNodesRequest",
-                    "schema": {
-                        "@type": "Object",
-                        "displayName": {
-                            "en": "Fetch OPCUA Nodes Request"
-                        },
-                        "fields": [
-                            {
-                                "displayName": {
-                                    "en": "StartNode"
-                                },
-                                "name": "startNode",
-                                "schema": "string"
-                            },
-                            {
-                                "displayName": {
-                                    "en": "Depth"
-                                },
-                                "name": "depth",
-                                "schema": "integer"
-                            },
-                            {
-                                "displayName": {
-                                    "en": "RequestedAttributes"
-                                },
-                                "name": "requestedAttributes",
-                                "schema": "string"
-                            }
-                        ]
-                    }
-                }
+                "name": "cmFetchNodes"
             },
             {
                 "@type": "Command",
                 "displayName": {
-                    "en": "Write OPCUA Values"
+                    "en": "Write OPC Values"
                 },
-                "name": "cmWriteOpcValues",
-                "request": {
-                    "@type": "CommandPayload",
-                    "displayName": {
-                        "en": "Write OPCUA Values Request"
-                    },
-                    "name": "WriteOpcValuesRequest",
-                    "schema": {
-                        "@type": "Object",
-                        "displayName": {
-                            "en": "Write OPCUA Values Request"
-                        },
-                        "fields": [
-                            {
-                                "displayName": {
-                                    "en": "Node Id"
-                                },
-                                "name": "nodeId",
-                                "schema": "string"
-                            },
-                            {
-                                "displayName": {
-                                    "en": "Value"
-                                },
-                                "name": "value",
-                                "schema": "string"
-                            }
-                        ]
-                    }
-                }
+                "name": "cmWriteValues"
             },
             {
                 "@type": "Command",
                 "displayName": {
-                    "en": "Read OPCUA Values"
+                    "en": "Read OPC Values"
                 },
-                "name": "cmReadOpcValues",
-                "request": {
-                    "@type": "CommandPayload",
-                    "displayName": {
-                        "en": "Read OPCUA Values Request"
-                    },
-                    "name": "ReadOpcValuesRequest",
-                    "schema": {
-                        "@type": "Object",
-                        "displayName": {
-                            "en": "Read OPCUA Values Request"
-                        },
-                        "fields": [
-                            {
-                                "displayName": {
-                                    "en": "Node Id"
-                                },
-                                "name": "nodeId",
-                                "schema": "string"
-                            }
-                        ]
-                    }
-                }
+                "name": "cmReadValues"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Add or Update Assets"
+                },
+                "name": "cmAddOrUpdateAssets"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Get All Assets"
+                },
+                "name": "cmGetAllAssets"
+            },
+            {
+                "@type": "Command",
+                "displayName": {
+                    "en": "Remove Assets"
+                },
+                "name": "cmRemoveAssets"
             },
             {
                 "@type": "Command",
