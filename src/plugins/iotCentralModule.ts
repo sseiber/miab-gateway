@@ -7,6 +7,24 @@ import {
     DeviceMethodRequest,
     DeviceMethodResponse
 } from 'azure-iot-device';
+import { createGzip } from 'zlib';
+import * as fse from 'fs-extra';
+import {
+    basename as pathBasename
+} from 'path';
+import {
+    arch as osArch,
+    hostname as osHostname,
+    platform as osPlatform,
+    type as osType,
+    release as osRelease,
+    version as osVersion,
+    cpus as osCpus,
+    totalmem as osTotalMem,
+    freemem as osFreeMem,
+    loadavg as osLoadAvg
+} from 'os';
+import { HealthState } from '../services/health';
 import { bind, defer, sleep } from '../utils';
 
 declare module '@hapi/hapi' {
@@ -17,6 +35,9 @@ declare module '@hapi/hapi' {
 
 const PluginName = 'IotCentralPlugin';
 const ModuleName = 'IotCentralPluginModule';
+const defaultHealthCheckRetries = 3;
+
+export const IotcOutputName = 'iotc';
 
 export interface IDirectMethodResult {
     status: number;
@@ -27,13 +48,13 @@ type DirectMethodFunction = (commandRequest: DeviceMethodRequest, commandRespons
 
 export interface IIotCentralPluginModuleOptions {
     initializeModule(): Promise<void>;
-    debugTelemetry(): boolean;
     onHandleModuleProperties(desiredProps: any): Promise<void>;
     onHandleDownstreamMessages?(inputName: string, message: IoTMessage): Promise<void>;
     onModuleConnect?(): void;
     onModuleDisconnect?(): void;
     onModuleClientError?(error: Error): void;
     onModuleReady(): Promise<void>;
+    onHealth(): Promise<HealthState>;
 }
 
 export interface IIotCentralPluginModule {
@@ -41,10 +62,12 @@ export interface IIotCentralPluginModule {
     deviceId: string;
     moduleClient: ModuleClient;
     debugTelemetry(): boolean;
+    getHealth(): Promise<HealthState>;
     sendMeasurement(data: any, outputName?: string): Promise<void>;
     updateModuleProperties(properties: any): Promise<void>;
     addDirectMethod(directMethodName: string, directMethodFunction: DirectMethodFunction): void;
     invokeDirectMethod(moduleId: string, methodName: string, payload: any, connectTimeout?: number, responseTimeout?: number): Promise<IDirectMethodResult>;
+    sendLargePayload(localFilepath: string): Promise<void>;
 }
 
 export const iotCentralPluginModule: Plugin<any> = {
@@ -53,8 +76,8 @@ export const iotCentralPluginModule: Plugin<any> = {
     register: async (server: Server, options: IIotCentralPluginModuleOptions): Promise<void> => {
         server.log([PluginName, 'info'], 'register');
 
-        if (!options.debugTelemetry) {
-            throw new Error('Missing required option debugTelemetry in IoTCentralModuleOptions');
+        if (!options.onHealth) {
+            throw new Error('Missing required option onHealth in IoTCentralModuleOptions');
         }
 
         if (!options.onHandleModuleProperties) {
@@ -73,11 +96,85 @@ export const iotCentralPluginModule: Plugin<any> = {
     }
 };
 
+interface ILargePayloadTelemetryChunk {
+    mp: string; // '1' = true
+    fn: string; // base filename with extension
+    pt: string; // part number (string)
+    gz: string; // gzipped, '1' = true
+}
+
+interface ILargePayloadTelemetryStatus {
+    fn: string; // base filename with extension
+    st: string; // upload status (200 = success, 500 = exception)
+    sm: string; // status message
+    sz: string; // file size total compressed file size of all chunks
+}
+
+interface ISystemProperties {
+    cpuModel: string;
+    cpuCores: number;
+    cpuUsage: number;
+    totalMemory: number;
+    freeMemory: number;
+}
+
+enum IotcEdgeHostDevicePropNames {
+    Hostname = 'hostname',
+    ProcessorArchitecture = 'processorArchitecture',
+    Platform = 'platform',
+    OsType = 'osType',
+    OsName = 'osName',
+    TotalMemory = 'totalMemory',
+    SwVersion = 'swVersion'
+}
+
+enum IoTCentralClientState {
+    Disconnected = 'disconnected',
+    Connected = 'connected'
+}
+
+enum ModuleState {
+    Inactive = 'inactive',
+    Active = 'active'
+}
+
+interface IRestartGatewayModuleCommandRequestParams {
+    timeout: number;
+}
+
+export interface IModuleCommandResponse {
+    status: number;
+    message: string;
+    payload?: any;
+}
+
+enum IoTCentralModuleCapability {
+    tlSystemHeartbeat = 'tlSystemHeartbeat',
+    tlFreeMemory = 'tlFreeMemory',
+    stIoTCentralClientState = 'stIoTCentralClientState',
+    stModuleState = 'stModuleState',
+    evModuleStarted = 'evModuleStarted',
+    evModuleStopped = 'evModuleStopped',
+    evModuleRestart = 'evModuleRestart',
+    wpDebugTelemetry = 'wpDebugTelemetry',
+    cmRestartGatewayModule = 'cmRestartGatewayModule'
+}
+
+interface IIoTCentralModuleSettings {
+    [IoTCentralModuleCapability.wpDebugTelemetry]: boolean;
+}
+
 class IotCentralPluginModule implements IIotCentralPluginModule {
     private server: Server;
     private moduleTwin: Twin = null;
     private deferredStart = defer();
     private options: IIotCentralPluginModuleOptions;
+    private healthCheckRetries: number = defaultHealthCheckRetries;
+    private healthState = HealthState.Good;
+    private healthCheckFailStreak = 0;
+    private moduleSettings: IIoTCentralModuleSettings = {
+        [IoTCentralModuleCapability.wpDebugTelemetry]: false
+    };
 
     constructor(server: Server, options: IIotCentralPluginModuleOptions) {
         this.server = server;
@@ -103,6 +200,28 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
                 await this.deferredStart.promise;
 
                 await this.options.onModuleReady();
+
+                this.healthCheckRetries = Number(process.env.healthCheckRetries) || defaultHealthCheckRetries;
+
+                const systemProperties = await this.getSystemProperties();
+
+                this.addDirectMethod(IoTCentralModuleCapability.cmRestartGatewayModule, this.handleDirectMethod);
+
+                await this.updateModuleProperties({
+                    [IotcEdgeHostDevicePropNames.ProcessorArchitecture]: osArch() || 'Unknown',
+                    [IotcEdgeHostDevicePropNames.Hostname]: osHostname() || 'Unknown',
+                    [IotcEdgeHostDevicePropNames.Platform]: osPlatform() || 'Unknown',
+                    [IotcEdgeHostDevicePropNames.OsType]: osType() || 'Unknown',
+                    [IotcEdgeHostDevicePropNames.OsName]: osRelease() || 'Unknown',
+                    [IotcEdgeHostDevicePropNames.TotalMemory]: systemProperties.totalMemory || 0,
+                    [IotcEdgeHostDevicePropNames.SwVersion]: osVersion() || 'Unknown'
+                });
+
+                await this.sendMeasurement({
+                    [IoTCentralModuleCapability.stIoTCentralClientState]: IoTCentralClientState.Connected,
+                    [IoTCentralModuleCapability.stModuleState]: ModuleState.Active,
+                    [IoTCentralModuleCapability.evModuleStarted]: 'Module initialization'
+                }, IotcOutputName);
             }
         }
         catch (ex) {
@@ -119,7 +238,56 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
     public moduleClient: ModuleClient = null;
 
     public debugTelemetry(): boolean {
-        return this.options.debugTelemetry();
+        return this.moduleSettings[IoTCentralModuleCapability.wpDebugTelemetry];
+    }
+
+    public async getHealth(): Promise<HealthState> {
+        if (!this.moduleClient) {
+            return this.healthState;
+        }
+
+        let healthState = this.healthState;
+
+        try {
+            if (healthState === HealthState.Good) {
+                const healthTelemetry = {};
+                const systemProperties = await this.getSystemProperties();
+                const freeMemory = systemProperties?.freeMemory || 0;
+
+                healthTelemetry[IoTCentralModuleCapability.tlFreeMemory] = freeMemory;
+
+                // TODO:
+                // Find the right threshold for this metric
+                if (freeMemory === 0) {
+                    healthState = HealthState.Critical;
+                }
+                else {
+                    healthState = await this.options.onHealth();
+                }
+
+                healthTelemetry[IoTCentralModuleCapability.tlSystemHeartbeat] = healthState;
+
+                await this.sendMeasurement(healthTelemetry, IotcOutputName);
+            }
+
+            this.healthState = healthState;
+        }
+        catch (ex) {
+            this.server.log([ModuleName, 'error'], `Error in healthState (may indicate a critical issue): ${ex.message}`);
+            this.healthState = HealthState.Critical;
+        }
+
+        if (this.healthState < HealthState.Good) {
+            this.server.log([ModuleName, 'warning'], `Health check warning: ${HealthState[healthState]}`);
+
+            if (++this.healthCheckFailStreak >= this.healthCheckRetries) {
+                this.server.log([ModuleName, 'warning'], `Health check too many warnings: ${healthState}`);
+
+                await this.restartModule(0, 'checkHealthState');
+            }
+        }
+
+        return this.healthState;
     }
 
     public async sendMeasurement(data: any, outputName?: string): Promise<void> {
@@ -138,7 +306,7 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
             }
 
             if (this.debugTelemetry()) {
-                this.server.log([ModuleName, 'info'], `sendEvent: ${JSON.stringify(data, null, 4)}`);
+                this.server.log([ModuleName, 'info'], `sendMeasurement: ${JSON.stringify(data, null, 4)}`);
             }
         }
         catch (ex) {
@@ -223,6 +391,116 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
         return directMethodResult;
     }
 
+    public async sendLargePayload(localFilepath: string): Promise<void> {
+        this.server.log([ModuleName, 'info'], `sendLargePayload`);
+
+        try {
+            this.server.log([ModuleName, 'info'], `Preparing to gzip file at ${localFilepath}`);
+
+            const baseFilename = pathBasename(localFilepath);
+            const gzipFilepath = `${localFilepath}.gz`;
+
+            // Base64 encodes each set of 3 bytes into 4 bytes. Also, the output
+            // is padded to be a multiple of 4. The size of the base64 converted
+            // bytes of size (n) is Math.ceil(n / 3) * 4. So, if we have a budget
+            // of 128Kb chunks (IoT Hub telemetry budget) we will use .75 of that
+            // or 96Kb.
+            const readChunkSize = 1024 * 96;
+
+            const r = fse.createReadStream(localFilepath);
+            const z = createGzip();
+            const w = fse.createWriteStream(gzipFilepath);
+            r.pipe(z).pipe(w);
+
+            this.server.log([ModuleName, 'info'], `Starting chunk upload of gzipped file: ${gzipFilepath}`);
+
+            const readable = fse.createReadStream(gzipFilepath, {
+                highWaterMark: readChunkSize
+            });
+
+            readable.on('readable', () => {
+                let chunk;
+                let iChunk = 0;
+                let totalBytes = 0;
+                let statusCode = 200;
+                let statusMessage = 'Succeeded';
+
+                try {
+                    while (null !== (chunk = readable.read(readChunkSize))) {
+                        totalBytes += chunk.length;
+
+                        const chunkProps: ILargePayloadTelemetryChunk = {
+                            mp: '1',
+                            fn: baseFilename,
+                            pt: `${iChunk++}`,
+                            gz: '1'
+                        };
+
+                        void this.sendLargePayloadMessage({
+                            lpData: chunk.toString('base64')
+                        }, chunkProps);
+                    }
+                }
+                catch (ex) {
+                    statusCode = 500;
+                    statusMessage = `Error while sending larage payload telemetry chunks: ${ex.message}`;
+
+                    this.server.log([ModuleName, 'error'], statusMessage);
+                }
+                finally {
+                    const statusTelemetry: ILargePayloadTelemetryStatus = {
+                        fn: baseFilename,
+                        st: `${statusCode}`,
+                        sm: statusMessage,
+                        sz: `${totalBytes}`
+                    };
+
+                    void this.sendLargePayloadMessage(statusTelemetry);
+                }
+            });
+
+            readable.on('close', () => {
+                this.server.log([ModuleName, 'info'], `Finished processing chunks for telemetry`);
+            });
+
+        }
+        catch (ex) {
+            this.server.log([ModuleName, 'error'], `Error preparing file for large payload upload: ${ex.message} `);
+        }
+
+        return;
+    }
+
+    public async sendLargePayloadMessage(data: any, properties?: any): Promise<void> {
+        if (!data || !this.moduleClient) {
+            return;
+        }
+
+        try {
+            const iotcMessage = new IoTMessage(JSON.stringify(data));
+
+            iotcMessage.contentType = 'application/json';
+            iotcMessage.contentEncoding = 'utf-8';
+
+            for (const prop in properties) {
+                if (!Object.prototype.hasOwnProperty.call(properties, prop)) {
+                    continue;
+                }
+
+                iotcMessage.properties.add(prop, properties[prop]);
+            }
+
+            await this.moduleClient.sendOutputEvent(IotcOutputName, iotcMessage);
+
+            if (this.debugTelemetry()) {
+                this.server.log([ModuleName, 'info'], `sendMeasurementWithProperties: ${JSON.stringify(data, null, 4)}`);
+            }
+        }
+        catch (ex) {
+            this.server.log([ModuleName, 'error'], `sendMeasurementWithProperties: ${ex.message}`);
+        }
+    }
+
     private async connectModuleClient(): Promise<boolean> {
         let result = true;
 
@@ -242,17 +520,17 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
         }
 
         try {
-            this.server.log([ModuleName, 'info'], `IOTEDGE_WORKLOADURI: ${process.env.IOTEDGE_WORKLOADURI}`);
-            this.server.log([ModuleName, 'info'], `IOTEDGE_DEVICEID: ${process.env.IOTEDGE_DEVICEID}`);
-            this.server.log([ModuleName, 'info'], `IOTEDGE_MODULEID: ${process.env.IOTEDGE_MODULEID}`);
-            this.server.log([ModuleName, 'info'], `IOTEDGE_MODULEGENERATIONID: ${process.env.IOTEDGE_MODULEGENERATIONID}`);
-            this.server.log([ModuleName, 'info'], `IOTEDGE_IOTHUBHOSTNAME: ${process.env.IOTEDGE_IOTHUBHOSTNAME}`);
-            this.server.log([ModuleName, 'info'], `IOTEDGE_AUTHSCHEME: ${process.env.IOTEDGE_AUTHSCHEME}`);
+            this.server.log([ModuleName, 'info'], `IOTEDGE_WORKLOADURI: ${process.env.IOTEDGE_WORKLOADURI} `);
+            this.server.log([ModuleName, 'info'], `IOTEDGE_DEVICEID: ${process.env.IOTEDGE_DEVICEID} `);
+            this.server.log([ModuleName, 'info'], `IOTEDGE_MODULEID: ${process.env.IOTEDGE_MODULEID} `);
+            this.server.log([ModuleName, 'info'], `IOTEDGE_MODULEGENERATIONID: ${process.env.IOTEDGE_MODULEGENERATIONID} `);
+            this.server.log([ModuleName, 'info'], `IOTEDGE_IOTHUBHOSTNAME: ${process.env.IOTEDGE_IOTHUBHOSTNAME} `);
+            this.server.log([ModuleName, 'info'], `IOTEDGE_AUTHSCHEME: ${process.env.IOTEDGE_AUTHSCHEME} `);
 
             this.moduleClient = await ModuleClient.fromEnvironment(Mqtt);
         }
         catch (ex) {
-            this.server.log([ModuleName, 'error'], `Failed to instantiate client interface from configuraiton: ${ex.message}`);
+            this.server.log([ModuleName, 'error'], `Failed to instantiate client interface from configuraiton: ${ex.message} `);
         }
 
         if (!this.moduleClient) {
@@ -264,7 +542,7 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
             this.moduleClient.on('disconnect', this.onModuleDisconnect);
             this.moduleClient.on('error', this.onModuleClientError);
 
-            this.server.log([ModuleName, 'info'], `Waiting for dependent modules to initialize (approx. 15s)...`);
+            this.server.log([ModuleName, 'info'], `Waiting for dependent modules to initialize(approx. 15s)...`);
             await sleep(15000);
 
             await this.moduleClient.open();
@@ -278,10 +556,10 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
             this.moduleTwin.on('properties.desired', this.onHandleModuleProperties);
             this.moduleClient.on('inputMessage', this.onHandleDownstreamMessages);
 
-            this.server.log([ModuleName, 'info'], `IoT Central successfully connected module: ${process.env.IOTEDGE_MODULEID}, instance id: ${process.env.IOTEDGE_DEVICEID}`);
+            this.server.log([ModuleName, 'info'], `IoT Central successfully connected module: ${process.env.IOTEDGE_MODULEID}, instance id: ${process.env.IOTEDGE_DEVICEID} `);
         }
         catch (ex) {
-            this.server.log([ModuleName, 'error'], `IoT Central connection error: ${ex.message}`);
+            this.server.log([ModuleName, 'error'], `IoT Central connection error: ${ex.message} `);
 
             result = false;
         }
@@ -295,7 +573,50 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
             return;
         }
 
+        this.server.log([ModuleName, 'info'], `onHandleModuleProperties`);
+        if (this.debugTelemetry()) {
+            this.server.log([ModuleName, 'info'], `desiredChangedSettings:\n${JSON.stringify(desiredChangedSettings, null, 4)}`);
+        }
+
         await this.options.onHandleModuleProperties(desiredChangedSettings);
+
+        try {
+            const patchedProperties = {};
+
+            for (const setting in desiredChangedSettings) {
+                if (!Object.prototype.hasOwnProperty.call(desiredChangedSettings, setting)) {
+                    continue;
+                }
+
+                if (setting === '$version') {
+                    continue;
+                }
+
+                const value = desiredChangedSettings[setting];
+
+                switch (setting) {
+                    case IoTCentralModuleCapability.wpDebugTelemetry:
+                        patchedProperties[setting] = {
+                            value: this.moduleSettings[setting] = value || false,
+                            ac: 200,
+                            ad: 'completed',
+                            av: desiredChangedSettings['$version']
+                        };
+                        break;
+
+                    default:
+                        this.server.log([ModuleName, 'error'], `Received desired property change for unknown setting '${setting}'`);
+                        break;
+                }
+            }
+
+            if (Object.prototype.hasOwnProperty.call(patchedProperties, 'value')) {
+                await this.updateModuleProperties(patchedProperties);
+            }
+        }
+        catch (ex) {
+            this.server.log([ModuleName, 'error'], `Exception while handling desired properties: ${ex.message}`);
+        }
 
         this.deferredStart.resolve();
     }
@@ -341,11 +662,82 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
                 this.options.onModuleClientError(error);
             }
             else {
-                this.server.log([ModuleName, 'error'], `Module client connection error: ${error.message}`);
+                this.server.log([ModuleName, 'error'], `Module client connection error: ${error.message} `);
             }
         }
         catch (ex) {
-            this.server.log([ModuleName, 'error'], `Module client connection error: ${ex.message}`);
+            this.server.log([ModuleName, 'error'], `Module client connection error: ${ex.message} `);
         }
+    }
+
+    @bind
+    private async handleDirectMethod(commandRequest: DeviceMethodRequest, commandResponse: DeviceMethodResponse) {
+        this.server.log([ModuleName, 'info'], `${commandRequest.methodName} command received`);
+
+        const response: IModuleCommandResponse = {
+            status: 200,
+            message: ''
+        };
+
+        try {
+            switch (commandRequest.methodName) {
+                case IoTCentralModuleCapability.cmRestartGatewayModule:
+                    await this.restartModule((commandRequest?.payload as IRestartGatewayModuleCommandRequestParams)?.timeout || 0, 'RestartModule command received');
+
+                    response.status = 200;
+                    response.message = 'Restart module request received';
+                    break;
+
+                default:
+                    response.status = 400;
+                    response.message = `An unknown method name was found: ${commandRequest.methodName}`;
+            }
+
+            this.server.log([ModuleName, 'info'], response.message);
+        }
+        catch (ex) {
+            response.status = 400;
+            response.message = `An error occurred executing the command ${commandRequest.methodName}: ${ex.message}`;
+
+            this.server.log([ModuleName, 'error'], response.message);
+        }
+
+        await commandResponse.send(200, response);
+    }
+
+    private async restartModule(timeout: number, reason: string): Promise<void> {
+        this.server.log([ModuleName, 'info'], `restartModule`);
+
+        try {
+            await this.sendMeasurement({
+                [IoTCentralModuleCapability.evModuleRestart]: reason,
+                [IoTCentralModuleCapability.stModuleState]: ModuleState.Inactive,
+                [IoTCentralModuleCapability.evModuleStopped]: 'Module restart'
+            }, IotcOutputName);
+
+            await sleep(1000 * timeout);
+        }
+        catch (ex) {
+            this.server.log([ModuleName, 'error'], `${ex.message}`);
+        }
+
+        // let Docker restart our container after 5 additional seconds to allow responses to this method to return
+        setTimeout(() => {
+            this.server.log([ModuleName, 'info'], `Shutting down main process - module container will restart`);
+            process.exit(1);
+        }, 1000 * 5);
+    }
+
+    private async getSystemProperties(): Promise<ISystemProperties> {
+        const cpus = osCpus();
+        const cpuUsageSamples = osLoadAvg();
+
+        return {
+            cpuModel: cpus[0]?.model || 'Unknown',
+            cpuCores: cpus?.length || 0,
+            cpuUsage: cpuUsageSamples[0],
+            totalMemory: osTotalMem() / 1024,
+            freeMemory: osFreeMem() / 1024
+        };
     }
 }
