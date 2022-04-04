@@ -1,406 +1,417 @@
-[
-    {
+{
+    "@id": "dtmi:com:azureiot:definition:IndCnctProxyGw;1",
+    "@type": [
+        "ModelDefinition",
+        "DeviceModel",
+        "EdgeModel",
+        "GatewayModel"
+    ],
+    "@context": [
+        "dtmi:iotcentral:context;2",
+        "dtmi:dtdl:context;2"
+    ],
+    "displayName": "Industrial Connect Proxy Gateway Definition",
+    "capabilityModel": {
         "@id": "dtmi:com:azureiot:model:IndCnctProxyGw;1",
-        "@context": [
-            "dtmi:iotcentral:context;2",
-            "dtmi:dtdl:context;2"
-        ],
         "@type": "Interface",
-        "displayName": {
-            "en": "Industrial Connect Proxy Gateway Model"
-        },
+        "displayName": "Industrial Connect Proxy Gateway Model",
         "contents": [
             {
-                "@context": [
-                    "dtmi:iotcentral:context;2",
-                    "dtmi:dtdl:context;2"
-                ],
                 "@id": "dtmi:com:azureiot:model:IndCnctProxyGw:IndCnctProxyGwModule;1",
                 "@type": [
                     "Relationship",
                     "EdgeModule"
                 ],
-                "displayName": {
-                    "en": "Industrial Connect Proxy Gateway Module"
-                },
+                "displayName": "Industrial Connect Proxy Gateway Module",
                 "maxMultiplicity": 1,
                 "name": "IndCnctProxyGwModule",
                 "target": [
-                    "dtmi:com:azureiot:IndCnctProxyGwModule;1"
-                ]
-            }
-        ]
-    },
-    {
-        "@id": "dtmi:com:azureiot:IndCnctProxyGwModule;1",
-        "@type": "Interface",
-        "contents": [
-            {
-                "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:rel;1",
-                "@type": [
-                    "Relationship",
-                    "GatewayDevice"
-                ],
-                "displayName": {
-                    "en": "rel"
-                },
-                "name": "rel",
-                "target": []
-            }
-        ],
-        "displayName": {
-            "en": "Industrial Connect Proxy Gateway Module"
-        },
-        "extends": [
-            "dtmi:com:azureiot:IndCnctProxyGwModule:DeviceInformation;1",
-            "dtmi:com:azureiot:IndCnctProxyGwModule:MiaBSettings;1",
-            "dtmi:com:azureiot:IndCnctProxyGwModule:MiaBInterface;1"
-        ],
-        "@context": [
-            "dtmi:iotcentral:context;2",
-            "dtmi:dtdl:context;2"
-        ]
-    },
-    {
-        "@context": [
-            "dtmi:iotcentral:context;2",
-            "dtmi:dtdl:context;2"
-        ],
-        "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:DeviceInformation;1",
-        "@type": "Interface",
-        "displayName": {
-            "en": "Industrial Connect Proxy Device Information Interface"
-        },
-        "contents": [
-            {
-                "@type": "Property",
-                "displayName": {
-                    "en": "Processor architecture"
-                },
-                "name": "processorArchitecture",
-                "schema": "string"
-            },
-            {
-                "@type": "Property",
-                "displayName": {
-                    "en": "Hostname"
-                },
-                "name": "hostname",
-                "schema": "string"
-            },
-            {
-                "@type": "Property",
-                "displayName": {
-                    "en": "Platform"
-                },
-                "name": "platform",
-                "schema": "string"
-            },
-            {
-                "@type": "Property",
-                "displayName": {
-                    "en": "OS Type"
-                },
-                "name": "osType",
-                "schema": "string"
-            },
-            {
-                "@type": "Property",
-                "displayName": {
-                    "en": "Operating system"
-                },
-                "name": "osName",
-                "schema": "string"
-            },
-            {
-                "@type": "Property",
-                "displayName": {
-                    "en": "Total memory"
-                },
-                "name": "totalMemory",
-                "schema": "long"
-            },
-            {
-                "@type": "Property",
-                "displayName": {
-                    "en": "Software version"
-                },
-                "name": "swVersion",
-                "schema": "string"
-            }
-        ]
-    },
-    {
-        "@context": [
-            "dtmi:iotcentral:context;2",
-            "dtmi:dtdl:context;2"
-        ],
-        "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:MiaBSettings;1",
-        "@type": "Interface",
-        "displayName": {
-            "en": "Industrial Connect Proxy Settings"
-        },
-        "contents": [
-            {
-                "@type": "Property",
-                "displayName": {
-                    "en": "Debug Telemetry"
-                },
-                "name": "wpDebugTelemetry",
-                "writable": true,
-                "schema": "boolean"
-            },
-            {
-                "@type": "Property",
-                "displayName": {
-                    "en": "Blob Storage Connection String"
-                },
-                "name": "wpBlobConnectionString",
-                "writable": true,
-                "schema": "string"
-            },
-            {
-                "@type": "Property",
-                "displayName": {
-                    "en": "Blob Storage Container Name"
-                },
-                "name": "wpBlobContainerName",
-                "writable": true,
-                "schema": "string"
-            }
-        ]
-    },
-    {
-        "@context": [
-            "dtmi:iotcentral:context;2",
-            "dtmi:dtdl:context;2"
-        ],
-        "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:MiaBInterface;1",
-        "@type": "Interface",
-        "displayName": {
-            "en": "Industrial Connect Proxy Interface"
-        },
-        "contents": [
-            {
-                "@type": "Telemetry",
-                "displayName": {
-                    "en": "System Heartbeat"
-                },
-                "name": "tlSystemHeartbeat",
-                "schema": "integer"
-            },
-            {
-                "@type": "Telemetry",
-                "displayName": {
-                    "en": "Free Memory"
-                },
-                "name": "tlFreeMemory",
-                "schema": "long"
-            },
-            {
-                "@type": [
-                    "Telemetry",
-                    "State"
-                ],
-                "displayName": {
-                    "en": "IoT Central Client State"
-                },
-                "name": "stIoTCentralClientState",
-                "schema": {
-                    "@type": "Enum",
-                    "valueSchema": "string",
-                    "enumValues": [
-                        {
-                            "displayName": {
-                                "en": "disconnected"
-                            },
-                            "enumValue": "disconnected",
-                            "name": "disconnected"
-                        },
-                        {
-                            "displayName": {
-                                "en": "connected"
-                            },
-                            "enumValue": "connected",
-                            "name": "connected"
-                        }
-                    ]
-                }
-            },
-            {
-                "@type": [
-                    "Telemetry",
-                    "State"
-                ],
-                "displayName": {
-                    "en": "IoT Central Module State"
-                },
-                "name": "stModuleState",
-                "schema": {
-                    "@type": "Enum",
-                    "valueSchema": "string",
-                    "enumValues": [
-                        {
-                            "displayName": {
-                                "en": "inactive"
-                            },
-                            "enumValue": "inactive",
-                            "name": "inactive"
-                        },
-                        {
-                            "displayName": {
-                                "en": "active"
-                            },
-                            "enumValue": "active",
-                            "name": "active"
-                        }
-                    ]
-                }
-            },
-            {
-                "@type": [
-                    "Telemetry",
-                    "Event"
-                ],
-                "displayName": {
-                    "en": "Module Started"
-                },
-                "name": "evModuleStarted",
-                "schema": "string"
-            },
-            {
-                "@type": [
-                    "Telemetry",
-                    "Event"
-                ],
-                "displayName": {
-                    "en": "Module Stopped"
-                },
-                "name": "evModuleStopped",
-                "schema": "string"
-            },
-            {
-                "@type": [
-                    "Telemetry",
-                    "Event"
-                ],
-                "displayName": {
-                    "en": "Module Restart"
-                },
-                "name": "evModuleRestart",
-                "schema": "string"
-            },
-            {
-                "@type": [
-                    "Telemetry",
-                    "Event"
-                ],
-                "displayName": {
-                    "en": "Fetched OPC Nodes Started"
-                },
-                "name": "evFetchedOpcNodesStarted",
-                "schema": "string"
-            },
-            {
-                "@type": [
-                    "Telemetry",
-                    "Event"
-                ],
-                "displayName": {
-                    "en": "Fetched OPC Nodes Finished"
-                },
-                "name": "evFetchedOpcNodesFinished",
-                "schema": "string"
-            },
-            {
-                "@type": [
-                    "Telemetry",
-                    "Event"
-                ],
-                "displayName": {
-                    "en": "Fetched OPC Nodes Uploaded"
-                },
-                "name": "evFetchedOpcNodesUploaded",
-                "schema": "string"
-            },
-            {
-                "@type": "Command",
-                "displayName": {
-                    "en": "Test OPC Server Connection"
-                },
-                "name": "cmTestConnection"
-            },
-            {
-                "@type": "Command",
-                "displayName": {
-                    "en": "Fetch OPC Nodes"
-                },
-                "name": "cmFetchNodes"
-            },
-            {
-                "@type": "Command",
-                "displayName": {
-                    "en": "Write OPC Values"
-                },
-                "name": "cmWriteValues"
-            },
-            {
-                "@type": "Command",
-                "displayName": {
-                    "en": "Read OPC Values"
-                },
-                "name": "cmReadValues"
-            },
-            {
-                "@type": "Command",
-                "displayName": {
-                    "en": "Add or Update Assets"
-                },
-                "name": "cmAddOrUpdateAssets"
-            },
-            {
-                "@type": "Command",
-                "displayName": {
-                    "en": "Get All Assets"
-                },
-                "name": "cmGetAllAssets"
-            },
-            {
-                "@type": "Command",
-                "displayName": {
-                    "en": "Remove Assets"
-                },
-                "name": "cmRemoveAssets"
-            },
-            {
-                "@type": "Command",
-                "displayName": {
-                    "en": "Restart Gateway Module"
-                },
-                "name": "cmRestartGatewayModule",
-                "request": {
-                    "@type": "CommandPayload",
-                    "displayName": {
-                        "en": "Restart Gateway Module Request"
-                    },
-                    "name": "RestartGatewayModuleRequest",
-                    "schema": {
-                        "@type": "Object",
-                        "displayName": {
-                            "en": "Restart Gateway Module Request"
-                        },
-                        "fields": [
+                    {
+                        "@id": "dtmi:com:azureiot:IndCnctProxyGwModule;1",
+                        "@type": "Interface",
+                        "displayName": "Industrial Connect Proxy Gateway Module",
+                        "contents": [
                             {
-                                "displayName": {
-                                    "en": "Timeout"
-                                },
-                                "name": "timeout",
-                                "schema": "integer"
+                                "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:rel;1",
+                                "@type": [
+                                    "Relationship",
+                                    "GatewayDevice"
+                                ],
+                                "displayName": "rel",
+                                "name": "rel",
+                                "target": []
+                            }
+                        ],
+                        "extends": [
+                            {
+                                "@id": "dtmi:com:azureiot:IoTCentralModule:DeviceInformation;1",
+                                "@type": [
+                                    "Interface",
+                                    "NamedInterface"
+                                ],
+                                "displayName": "IoT Central Module Device Information Interface",
+                                "name": "com_azureiot_IoTCentralModule_DeviceInformation",
+                                "contents": [
+                                    {
+                                        "@type": "Property",
+                                        "displayName": "Processor architecture",
+                                        "name": "processorArchitecture",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": "Property",
+                                        "displayName": "Hostname",
+                                        "name": "hostname",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": "Property",
+                                        "displayName": "Platform",
+                                        "name": "platform",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": "Property",
+                                        "displayName": "OS Type",
+                                        "name": "osType",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": "Property",
+                                        "displayName": "Operating system",
+                                        "name": "osName",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": "Property",
+                                        "displayName": "Total memory",
+                                        "name": "totalMemory",
+                                        "schema": "long"
+                                    },
+                                    {
+                                        "@type": "Property",
+                                        "displayName": "Software version",
+                                        "name": "swVersion",
+                                        "schema": "string"
+                                    }
+                                ]
+                            },
+                            {
+                                "@id": "dtmi:com:azureiot:IoTCentralModuleModule:Settings;1",
+                                "@type": [
+                                    "Interface",
+                                    "NamedInterface"
+                                ],
+                                "displayName": "IoT Central Module Settings",
+                                "name": "com_azureiot_IoTCentralModule_Settings",
+                                "contents": [
+                                    {
+                                        "@type": "Property",
+                                        "displayName": "Debug Telemetry",
+                                        "name": "wpDebugTelemetry",
+                                        "writable": true,
+                                        "schema": "boolean"
+                                    }
+                                ]
+                            },
+                            {
+                                "@id": "dtmi:com:azureiot:IoTCentralModule:ModuleInterface;1",
+                                "@type": [
+                                    "Interface",
+                                    "NamedInterface"
+                                ],
+                                "displayName": "IoT Central Module Interface",
+                                "name": "com_azureiot_IoTCentralModule_ModuleInterface",
+                                "contents": [
+                                    {
+                                        "@type": "Telemetry",
+                                        "displayName": "System Heartbeat",
+                                        "name": "tlSystemHeartbeat",
+                                        "schema": "integer"
+                                    },
+                                    {
+                                        "@type": "Telemetry",
+                                        "displayName": "Free Memory",
+                                        "name": "tlFreeMemory",
+                                        "schema": "long"
+                                    },
+                                    {
+                                        "@type": [
+                                            "Telemetry",
+                                            "State"
+                                        ],
+                                        "displayName": "IoT Central Client State",
+                                        "name": "stIoTCentralClientState",
+                                        "schema": {
+                                            "@type": "Enum",
+                                            "enumValues": [
+                                                {
+                                                    "displayName": "disconnected",
+                                                    "enumValue": "disconnected",
+                                                    "name": "disconnected"
+                                                },
+                                                {
+                                                    "displayName": "connected",
+                                                    "enumValue": "connected",
+                                                    "name": "connected"
+                                                }
+                                            ],
+                                            "valueSchema": "string"
+                                        }
+                                    },
+                                    {
+                                        "@type": [
+                                            "Telemetry",
+                                            "State"
+                                        ],
+                                        "displayName": "IoT Central Module State",
+                                        "name": "stModuleState",
+                                        "schema": {
+                                            "@type": "Enum",
+                                            "enumValues": [
+                                                {
+                                                    "displayName": "inactive",
+                                                    "enumValue": "inactive",
+                                                    "name": "inactive"
+                                                },
+                                                {
+                                                    "displayName": "active",
+                                                    "enumValue": "active",
+                                                    "name": "active"
+                                                }
+                                            ],
+                                            "valueSchema": "string"
+                                        }
+                                    },
+                                    {
+                                        "@type": [
+                                            "Telemetry",
+                                            "Event"
+                                        ],
+                                        "displayName": "Module Started",
+                                        "name": "evModuleStarted",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": [
+                                            "Telemetry",
+                                            "Event"
+                                        ],
+                                        "displayName": "Module Stopped",
+                                        "name": "evModuleStopped",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": [
+                                            "Telemetry",
+                                            "Event"
+                                        ],
+                                        "displayName": "Module Restart",
+                                        "name": "evModuleRestart",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": "Command",
+                                        "displayName": "Restart Gateway Module",
+                                        "name": "cmRestartGatewayModule",
+                                        "request": {
+                                            "@type": "CommandPayload",
+                                            "displayName": "Restart Gateway Module Request",
+                                            "name": "RestartGatewayModuleRequest",
+                                            "schema": {
+                                                "@type": "Object",
+                                                "displayName": "Restart Gateway Module Request",
+                                                "fields": [
+                                                    {
+                                                        "displayName": "Timeout",
+                                                        "name": "timeout",
+                                                        "schema": "integer"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:Settings;1",
+                                "@type": [
+                                    "Interface",
+                                    "NamedInterface"
+                                ],
+                                "displayName": "Industrial Connect Proxy Gateway Settings",
+                                "name": "com_azureiot_IndCnctProxyGwModule_Settings",
+                                "contents": [
+                                    {
+                                        "@type": "Property",
+                                        "displayName": "OPC Endpoint",
+                                        "name": "wpOpcEndpoint",
+                                        "writable": true,
+                                        "schema": {
+                                            "@type": "Object",
+                                            "displayName": "OPC Endpoint",
+                                            "fields": [
+                                                {
+                                                    "displayName": "Uri",
+                                                    "name": "uri",
+                                                    "schema": "string"
+                                                },
+                                                {
+                                                    "displayName": "Security Mode",
+                                                    "name": "securityMode",
+                                                    "schema": "integer"
+                                                },
+                                                {
+                                                    "displayName": "Credentials",
+                                                    "name": "credentials",
+                                                    "schema": {
+                                                        "@type": "Object",
+                                                        "displayName": "Credentials",
+                                                        "fields": [
+                                                            {
+                                                                "displayName": "Credential Type",
+                                                                "name": "credentialType",
+                                                                "schema": "integer"
+                                                            },
+                                                            {
+                                                                "displayName": "Username",
+                                                                "name": "username",
+                                                                "schema": "string"
+                                                            },
+                                                            {
+                                                                "displayName": "Password",
+                                                                "name": "password",
+                                                                "schema": "string"
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "@type": "Property",
+                                        "displayName": "Server Node Discovery Root",
+                                        "name": "wpServerNodeDiscoveryRoot",
+                                        "writable": true,
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": "Property",
+                                        "displayName": "Blob Storage Connection String",
+                                        "name": "wpBlobConnectionString",
+                                        "writable": true,
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": "Property",
+                                        "displayName": "Blob Storage Container Name",
+                                        "name": "wpBlobContainerName",
+                                        "writable": true,
+                                        "schema": "string"
+                                    }
+                                ]
+                            },
+                            {
+                                "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:ModuleInterface;1",
+                                "@type": [
+                                    "Interface",
+                                    "NamedInterface"
+                                ],
+                                "displayName": "Industrial Connect Proxy Gateway Module Interface",
+                                "name": "com_azureiot_IndCnctProxyGwModule_ModuleInterface",
+                                "contents": [
+                                    {
+                                        "@type": [
+                                            "Telemetry",
+                                            "Event"
+                                        ],
+                                        "displayName": "Fetched OPC Nodes Auto-Discovery",
+                                        "name": "evFetchedOpcNodesAutoDiscovery",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": [
+                                            "Telemetry",
+                                            "Event"
+                                        ],
+                                        "displayName": "Fetched OPC Nodes Started",
+                                        "name": "evFetchedOpcNodesStarted",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": [
+                                            "Telemetry",
+                                            "Event"
+                                        ],
+                                        "displayName": "Fetched OPC Nodes Finished",
+                                        "name": "evFetchedOpcNodesFinished",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": [
+                                            "Telemetry",
+                                            "Event"
+                                        ],
+                                        "displayName": "Fetched OPC Nodes Error",
+                                        "name": "evFetchedOpcNodesError",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": [
+                                            "Telemetry",
+                                            "Event"
+                                        ],
+                                        "displayName": "Fetched OPC Nodes Uploaded",
+                                        "name": "evFetchedOpcNodesUploaded",
+                                        "schema": "string"
+                                    },
+                                    {
+                                        "@type": "Command",
+                                        "displayName": "Start OPC Node Discovery",
+                                        "name": "cmStartOpcNodeDiscovery"
+                                    },
+                                    {
+                                        "@type": "Command",
+                                        "displayName": "Test OPC Server Connection",
+                                        "name": "cmTestConnection"
+                                    },
+                                    {
+                                        "@type": "Command",
+                                        "displayName": "Fetch OPC Nodes",
+                                        "name": "cmFetchNodes"
+                                    },
+                                    {
+                                        "@type": "Command",
+                                        "displayName": "Write OPC Values",
+                                        "name": "cmWriteValues"
+                                    },
+                                    {
+                                        "@type": "Command",
+                                        "displayName": "Read OPC Values",
+                                        "name": "cmReadValues"
+                                    },
+                                    {
+                                        "@type": "Command",
+                                        "displayName": "Add or Update Assets",
+                                        "name": "cmAddOrUpdateAssets"
+                                    },
+                                    {
+                                        "@type": "Command",
+                                        "displayName": "Get All Assets",
+                                        "name": "cmGetAllAssets"
+                                    },
+                                    {
+                                        "@type": "Command",
+                                        "displayName": "Remove Assets",
+                                        "name": "cmRemoveAssets"
+                                    }
+                                ]
                             }
                         ]
                     }
-                }
+                ]
             }
         ]
     }
-]
+}
