@@ -1,6 +1,6 @@
-import { MiabGatewayService } from '../miabGateway';
+import { IndustrialConnectProxyGatewayService } from '../industrialConnectProxyGateway';
 
 it('should be constructed', () => {
-    const testInstance = new MiabGatewayService();
+    const testInstance = new IndustrialConnectProxyGatewayService();
     expect(testInstance).toBeDefined();
 });

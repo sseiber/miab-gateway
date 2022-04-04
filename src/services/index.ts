@@ -1,8 +1,8 @@
 
 import { HealthService } from './health';
-import { MiabGatewayService } from './miabGateway';
+import { IndustrialConnectProxyGatewayService } from './industrialConnectProxyGateway';
 
 export default [
     HealthService,
-    MiabGatewayService
+    IndustrialConnectProxyGatewayService
 ];

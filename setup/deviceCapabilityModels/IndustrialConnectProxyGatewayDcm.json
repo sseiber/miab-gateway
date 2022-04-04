@@ -1,5 +1,5 @@
 {
-    "@id": "dtmi:com:azureiot:definition:IndCnctProxyGw;1",
+    "@id": "dtmi:com:azureiot:definition:IndCnctProxyGateway;1",
     "@type": [
         "ModelDefinition",
         "DeviceModel",
@@ -12,27 +12,27 @@
     ],
     "displayName": "Industrial Connect Proxy Gateway Definition",
     "capabilityModel": {
-        "@id": "dtmi:com:azureiot:model:IndCnctProxyGw;1",
+        "@id": "dtmi:com:azureiot:model:IndCnctProxyGateway;1",
         "@type": "Interface",
         "displayName": "Industrial Connect Proxy Gateway Model",
         "contents": [
             {
-                "@id": "dtmi:com:azureiot:model:IndCnctProxyGw:IndCnctProxyGwModule;1",
+                "@id": "dtmi:com:azureiot:model:IndCnctProxyGateway:IndCnctProxyGatewayModule;1",
                 "@type": [
                     "Relationship",
                     "EdgeModule"
                 ],
                 "displayName": "Industrial Connect Proxy Gateway Module",
                 "maxMultiplicity": 1,
-                "name": "IndCnctProxyGwModule",
+                "name": "IndCnctProxyGatewayModule",
                 "target": [
                     {
-                        "@id": "dtmi:com:azureiot:IndCnctProxyGwModule;1",
+                        "@id": "dtmi:com:azureiot:IndCnctProxyGatewayModule;1",
                         "@type": "Interface",
                         "displayName": "Industrial Connect Proxy Gateway Module",
                         "contents": [
                             {
-                                "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:rel;1",
+                                "@id": "dtmi:com:azureiot:IndCnctProxyGatewayModule:rel;1",
                                 "@type": [
                                     "Relationship",
                                     "GatewayDevice"
@@ -234,13 +234,13 @@
                                 ]
                             },
                             {
-                                "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:Settings;1",
+                                "@id": "dtmi:com:azureiot:IndCnctProxyGatewayModule:Settings;1",
                                 "@type": [
                                     "Interface",
                                     "NamedInterface"
                                 ],
                                 "displayName": "Industrial Connect Proxy Gateway Settings",
-                                "name": "com_azureiot_IndCnctProxyGwModule_Settings",
+                                "name": "com_azureiot_IndCnctProxyGatewayModule_Settings",
                                 "contents": [
                                     {
                                         "@type": "Property",
@@ -313,13 +313,13 @@
                                 ]
                             },
                             {
-                                "@id": "dtmi:com:azureiot:IndCnctProxyGwModule:ModuleInterface;1",
+                                "@id": "dtmi:com:azureiot:IndCnctProxyGatewayModule:ModuleInterface;1",
                                 "@type": [
                                     "Interface",
                                     "NamedInterface"
                                 ],
                                 "displayName": "Industrial Connect Proxy Gateway Module Interface",
-                                "name": "com_azureiot_IndCnctProxyGwModule_ModuleInterface",
+                                "name": "com_azureiot_IndCnctProxyGatewayModule_ModuleInterface",
                                 "contents": [
                                     {
                                         "@type": [

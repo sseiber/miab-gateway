@@ -4,7 +4,7 @@ import { forget } from './forget';
 import { pjson } from './pjson';
 import { emptyObj } from './emptyObj';
 import { defer } from './defer';
-import { fileStream } from './fileStream';
+import { writeFileStream } from './writeFileStream';
 
 export {
     bind,
@@ -13,5 +13,5 @@ export {
     pjson,
     emptyObj,
     defer,
-    fileStream
+    writeFileStream
 };

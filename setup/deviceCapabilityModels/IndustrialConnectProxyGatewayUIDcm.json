@@ -226,6 +226,15 @@
                     "Telemetry",
                     "Event"
                 ],
+                "displayName": "Large Payload Status",
+                "name": "evLargePayloadStatus",
+                "schema": "string"
+            },
+            {
+                "@type": [
+                    "Telemetry",
+                    "Event"
+                ],
                 "displayName": "Module Restart",
                 "name": "evModuleRestart",
                 "schema": "string"

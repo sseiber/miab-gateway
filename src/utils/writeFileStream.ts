@@ -1,6 +1,6 @@
 import * as fse from 'fs-extra';
 
-class FileStream {
+class WriteFileStream {
     public filePath: string;
     public stream: fse.WriteStream;
 
@@ -47,6 +47,6 @@ class FileStream {
     }
 }
 
-export function fileStream(filePath: string): FileStream {
-    return new FileStream(filePath);
+export function writeFileStream(filePath: string): WriteFileStream {
+    return new WriteFileStream(filePath);
 }
