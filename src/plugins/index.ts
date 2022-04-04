@@ -1,12 +1,10 @@
 
 import { ConfigPlugin } from './config';
 import { BlobStoragePlugin } from './blobStorage';
-import { LargePayloadPlugin } from './largePayload';
-import { MiabGatewayPlugin } from './miabGateway';
+import { IndustrialConnectProxyGatewayPlugin } from './industrialConnectProxyGateway';
 
 export default [
     ConfigPlugin,
     BlobStoragePlugin,
-    LargePayloadPlugin,
-    MiabGatewayPlugin
+    IndustrialConnectProxyGatewayPlugin
 ];

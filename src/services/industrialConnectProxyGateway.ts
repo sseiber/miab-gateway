@@ -4,100 +4,42 @@ import {
     DeviceMethodRequest,
     DeviceMethodResponse
 } from 'azure-iot-device';
-import { IIotCentralPluginModule } from '../plugins/iotCentralModule';
+import {
+    IotcOutputName,
+    IIotCentralPluginModule,
+    IModuleCommandResponse
+} from '../plugins/iotCentralModule';
 import { IBlobStoragePluginModuleOptions } from 'src/plugins/blobStorage';
 import { HealthState } from './health';
-import {
-    arch as osArch,
-    hostname as osHostname,
-    platform as osPlatform,
-    type as osType,
-    release as osRelease,
-    version as osVersion,
-    cpus as osCpus,
-    totalmem as osTotalMem,
-    freemem as osFreeMem,
-    loadavg as osLoadAvg
-} from 'os';
 import { resolve as resolvePath } from 'path';
 import {
     gzipSync,
     gunzipSync
 } from 'zlib';
 import * as Wreck from '@hapi/wreck';
-import { bind, sleep, fileStream } from '../utils';
-import {
-    ITestConnectionRequest,
-    IBrowseNodesRequest,
-    IWriteValuesRequest,
-    IReadValuesRequest,
-    IAddOrUpdateAssetRequest,
-    IRemoveAssetRequest
-} from './industrialConnectModels';
+import { v4 as uuidv4 } from 'uuid';
+import { bind, sleep, writeFileStream } from '../utils';
+import { Models as ICModels } from '../types/industrialConnect';
 import moment = require('moment');
 
-const ModuleName = 'MiabGatewayService';
-
-const IotcOutputName = 'iotc';
-const defaultHealthCheckRetries = 3;
+const ModuleName = 'IndustrialConnectProxyGatewayService';
 
 interface IModuleEnvironmentConfig {
     ompAdapterModuleId: string;
     dpsProvisioningHost: string;
 }
 
-interface ISystemProperties {
-    cpuModel: string;
-    cpuCores: number;
-    cpuUsage: number;
-    totalMemory: number;
-    freeMemory: number;
-}
-
-enum IotcEdgeHostDevicePropNames {
-    Hostname = 'hostname',
-    ProcessorArchitecture = 'processorArchitecture',
-    Platform = 'platform',
-    OsType = 'osType',
-    OsName = 'osName',
-    TotalMemory = 'totalMemory',
-    SwVersion = 'swVersion'
-}
-
-enum IoTCentralClientState {
-    Disconnected = 'disconnected',
-    Connected = 'connected'
-}
-
-enum ModuleState {
-    Inactive = 'inactive',
-    Active = 'active'
-}
-
-interface IRestartGatewayModuleCommandRequestParams {
-    timeout: number;
-}
-
-interface IModuleCommandResponse {
-    status: number;
-    message: string;
-    payload?: any;
-}
-
-export enum MiabGatewayCapability {
-    tlSystemHeartbeat = 'tlSystemHeartbeat',
-    tlFreeMemory = 'tlFreeMemory',
-    stIoTCentralClientState = 'stIoTCentralClientState',
-    stModuleState = 'stModuleState',
-    evModuleStarted = 'evModuleStarted',
-    evModuleStopped = 'evModuleStopped',
-    evModuleRestart = 'evModuleRestart',
+export enum IndustrialConnectProxyGatewayCapability {
+    evFetchedOpcNodesAutoDiscovery = 'evFetchedOpcNodesAutoDiscovery',
     evFetchedOpcNodesStarted = 'evFetchedOpcNodesStarted',
     evFetchedOpcNodesFinished = 'evFetchedOpcNodesFinished',
+    evFetchedOpcNodesError = 'evFetchedOpcNodesError',
     evFetchedOpcNodesUploaded = 'evFetchedOpcNodesUploaded',
-    wpDebugTelemetry = 'wpDebugTelemetry',
+    wpOpcEndpoint = 'wpOpcEndpoint',
+    wpServerNodeDiscoveryRoot = 'wpServerNodeDiscoveryRoot',
     wpBlobConnectionString = 'wpBlobConnectionString',
     wpBlobContainerName = 'wpBlobContainerName',
+    cmStartOpcNodeDiscovery = 'cmStartOpcNodeDiscovery',
     cmTestConnection = 'cmTestConnection',
     cmFetchNodes = 'cmFetchNodes',
     cmWriteValues = 'cmWriteValues',
@@ -105,59 +47,54 @@ export enum MiabGatewayCapability {
     cmAddOrUpdateAssets = 'cmAddOrUpdateAssets',
     cmGetAllAssets = 'cmGetAllAssets',
     cmRemoveAssets = 'cmRemoveAssets',
-    cmRestartGatewayModule = 'cmRestartGatewayModule'
 }
 
-interface IMiabGatewaySettings {
-    [MiabGatewayCapability.wpDebugTelemetry]: boolean;
-    [MiabGatewayCapability.wpBlobConnectionString]: string;
-    [MiabGatewayCapability.wpBlobContainerName]: string;
+interface IIndustrialConnectProxyGatewaySettings {
+    [IndustrialConnectProxyGatewayCapability.wpOpcEndpoint]: ICModels.Endpoint;
+    [IndustrialConnectProxyGatewayCapability.wpServerNodeDiscoveryRoot]: string;
+    [IndustrialConnectProxyGatewayCapability.wpBlobConnectionString]: string;
+    [IndustrialConnectProxyGatewayCapability.wpBlobContainerName]: string;
 }
 
-export interface IMiabGatewayUtility {
+export interface IIndustrialConnectProxyGatewayUtility {
     moduleEnvironmentConfig: IModuleEnvironmentConfig;
     getModuleSetting(setting: string): any;
     iotcApiRequest(uri: string, method: string, options: any): Promise<any>;
 }
 
-@service('miabGateway')
-export class MiabGatewayService implements IMiabGatewayUtility {
+@service('industrialConnectProxyGateway')
+export class IndustrialConnectProxyGatewayService implements IIndustrialConnectProxyGatewayUtility {
     @inject('$server')
     private server: Server;
 
-    private iotCentralPluginModule: IIotCentralPluginModule;
-    private healthCheckRetries: number = defaultHealthCheckRetries;
     private healthState = HealthState.Good;
-    private healthCheckFailStreak = 0;
-    private moduleSettings: IMiabGatewaySettings = {
-        [MiabGatewayCapability.wpDebugTelemetry]: false,
-        [MiabGatewayCapability.wpBlobConnectionString]: '',
-        [MiabGatewayCapability.wpBlobContainerName]: ''
+    private iotCentralPluginModule: IIotCentralPluginModule;
+    private moduleSettings: IIndustrialConnectProxyGatewaySettings = {
+        [IndustrialConnectProxyGatewayCapability.wpOpcEndpoint]: {
+            uri: '',
+            securityMode: 0,
+            credentials: {
+                credentialType: 0,
+                username: '',
+                password: ''
+            }
+        },
+        [IndustrialConnectProxyGatewayCapability.wpServerNodeDiscoveryRoot]: '',
+        [IndustrialConnectProxyGatewayCapability.wpBlobConnectionString]: '',
+        [IndustrialConnectProxyGatewayCapability.wpBlobContainerName]: ''
     };
     public async init(): Promise<void> {
         this.server.log([ModuleName, 'info'], 'initialize');
     }
 
-    @bind
     public async initializeModule(): Promise<void> {
         this.server.log([ModuleName, 'info'], `initializeModule`);
 
         this.iotCentralPluginModule = this.server.settings.app.iotCentral;
     }
 
-    @bind
-    public debugTelemetry(): boolean {
-        return this.moduleSettings[MiabGatewayCapability.wpDebugTelemetry];
-    }
-
-    @bind
     public async onHandleModuleProperties(desiredChangedSettings: any): Promise<void> {
         try {
-            this.server.log([ModuleName, 'info'], `onHandleModuleProperties`);
-            if (this.debugTelemetry()) {
-                this.server.log([ModuleName, 'info'], `desiredChangedSettings:\n${JSON.stringify(desiredChangedSettings, null, 4)}`);
-            }
-
             const patchedProperties = {};
 
             for (const setting in desiredChangedSettings) {
@@ -172,17 +109,26 @@ export class MiabGatewayService implements IMiabGatewayUtility {
                 const value = desiredChangedSettings[setting];
 
                 switch (setting) {
-                    case MiabGatewayCapability.wpDebugTelemetry:
+                    case IndustrialConnectProxyGatewayCapability.wpOpcEndpoint:
                         patchedProperties[setting] = {
-                            value: this.moduleSettings[setting] = value || false,
+                            value: this.moduleSettings[setting] = value || {
+                                uri: '',
+                                securityMode: 0,
+                                credentials: {
+                                    credentialType: 0,
+                                    username: '',
+                                    password: ''
+                                }
+                            },
                             ac: 200,
                             ad: 'completed',
                             av: desiredChangedSettings['$version']
                         };
                         break;
 
-                    case MiabGatewayCapability.wpBlobConnectionString:
-                    case MiabGatewayCapability.wpBlobContainerName:
+                    case IndustrialConnectProxyGatewayCapability.wpServerNodeDiscoveryRoot:
+                    case IndustrialConnectProxyGatewayCapability.wpBlobConnectionString:
+                    case IndustrialConnectProxyGatewayCapability.wpBlobContainerName:
                         patchedProperties[setting] = {
                             value: this.moduleSettings[setting] = value || '',
                             ac: 200,
@@ -206,22 +152,19 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         }
     }
 
-    @bind
     public onModuleClientError(error: Error): void {
         this.server.log([ModuleName, 'error'], `Module client connection error: ${error.message}`);
         this.healthState = HealthState.Critical;
     }
 
-    @bind
     public async onModuleReady(): Promise<void> {
         this.server.log([ModuleName, 'info'], `Starting onModuleReady initializaton`);
 
-        this.healthCheckRetries = Number(process.env.healthCheckRetries) || defaultHealthCheckRetries;
         this.healthState = this.iotCentralPluginModule.moduleClient ? HealthState.Good : HealthState.Critical;
 
         const blobStorageOptions: IBlobStoragePluginModuleOptions = {
-            blobConnectionString: this.moduleSettings[MiabGatewayCapability.wpBlobConnectionString],
-            blobContainerName: this.moduleSettings[MiabGatewayCapability.wpBlobContainerName]
+            blobConnectionString: this.moduleSettings[IndustrialConnectProxyGatewayCapability.wpBlobConnectionString],
+            blobContainerName: this.moduleSettings[IndustrialConnectProxyGatewayCapability.wpBlobContainerName]
         };
 
         if (blobStorageOptions.blobConnectionString && blobStorageOptions.blobContainerName) {
@@ -233,78 +176,21 @@ export class MiabGatewayService implements IMiabGatewayUtility {
             this.server.log([ModuleName, 'info'], `All optional blob storage configuration values were not found`);
         }
 
-        const systemProperties = await this.getSystemProperties();
+        this.iotCentralPluginModule.addDirectMethod(IndustrialConnectProxyGatewayCapability.cmStartOpcNodeDiscovery, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(IndustrialConnectProxyGatewayCapability.cmTestConnection, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(IndustrialConnectProxyGatewayCapability.cmFetchNodes, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(IndustrialConnectProxyGatewayCapability.cmWriteValues, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(IndustrialConnectProxyGatewayCapability.cmReadValues, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(IndustrialConnectProxyGatewayCapability.cmAddOrUpdateAssets, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(IndustrialConnectProxyGatewayCapability.cmGetAllAssets, this.handleDirectMethod);
+        this.iotCentralPluginModule.addDirectMethod(IndustrialConnectProxyGatewayCapability.cmRemoveAssets, this.handleDirectMethod);
 
-        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmTestConnection, this.handleDirectMethod);
-        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmFetchNodes, this.handleDirectMethod);
-        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmWriteValues, this.handleDirectMethod);
-        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmReadValues, this.handleDirectMethod);
-        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmAddOrUpdateAssets, this.handleDirectMethod);
-        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmGetAllAssets, this.handleDirectMethod);
-        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmRemoveAssets, this.handleDirectMethod);
-        this.iotCentralPluginModule.addDirectMethod(MiabGatewayCapability.cmRestartGatewayModule, this.handleDirectMethod);
-
-        await this.iotCentralPluginModule.updateModuleProperties({
-            [IotcEdgeHostDevicePropNames.ProcessorArchitecture]: osArch() || 'Unknown',
-            [IotcEdgeHostDevicePropNames.Hostname]: osHostname() || 'Unknown',
-            [IotcEdgeHostDevicePropNames.Platform]: osPlatform() || 'Unknown',
-            [IotcEdgeHostDevicePropNames.OsType]: osType() || 'Unknown',
-            [IotcEdgeHostDevicePropNames.OsName]: osRelease() || 'Unknown',
-            [IotcEdgeHostDevicePropNames.TotalMemory]: systemProperties.totalMemory || 0,
-            [IotcEdgeHostDevicePropNames.SwVersion]: osVersion() || 'Unknown'
-        });
-
-        await this.iotCentralPluginModule.sendMeasurement({
-            [MiabGatewayCapability.stIoTCentralClientState]: IoTCentralClientState.Connected,
-            [MiabGatewayCapability.stModuleState]: ModuleState.Active,
-            [MiabGatewayCapability.evModuleStarted]: 'Module initialization'
-        }, IotcOutputName);
+        // check for endpoint and node settings and kick off a scan for nodes
+        void this.startOpcNodeDiscovery();
     }
 
     @bind
-    public async getHealth(): Promise<HealthState> {
-        if (!this.iotCentralPluginModule) {
-            return this.healthState;
-        }
-
-        let healthState = this.healthState;
-
-        try {
-            if (healthState === HealthState.Good) {
-                const healthTelemetry = {};
-                const systemProperties = await this.getSystemProperties();
-                const freeMemory = systemProperties?.freeMemory || 0;
-
-                healthTelemetry[MiabGatewayCapability.tlFreeMemory] = freeMemory;
-
-                // TODO:
-                // Find the right threshold for this metric
-                if (freeMemory === 0) {
-                    healthState = HealthState.Critical;
-                }
-
-                healthTelemetry[MiabGatewayCapability.tlSystemHeartbeat] = healthState;
-
-                await this.iotCentralPluginModule.sendMeasurement(healthTelemetry, IotcOutputName);
-            }
-
-            this.healthState = healthState;
-        }
-        catch (ex) {
-            this.server.log([ModuleName, 'error'], `Error in healthState (may indicate a critical issue): ${ex.message}`);
-            this.healthState = HealthState.Critical;
-        }
-
-        if (this.healthState < HealthState.Good) {
-            this.server.log([ModuleName, 'warning'], `Health check warning: ${HealthState[healthState]}`);
-
-            if (++this.healthCheckFailStreak >= this.healthCheckRetries) {
-                this.server.log([ModuleName, 'warning'], `Health check too many warnings: ${healthState}`);
-
-                await this.restartModule(0, 'checkHealthState');
-            }
-        }
-
+    public async onHealth(): Promise<HealthState> {
         return this.healthState;
     }
 
@@ -335,7 +221,61 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         }
     }
 
-    private async testConnection(testConnectionRequest: ITestConnectionRequest): Promise<IModuleCommandResponse> {
+    private async startOpcNodeDiscovery(): Promise<IModuleCommandResponse> {
+        const response: IModuleCommandResponse = {
+            status: 500,
+            message: ``,
+            payload: {}
+        };
+
+        const discoveryRoot = this.moduleSettings[IndustrialConnectProxyGatewayCapability.wpServerNodeDiscoveryRoot];
+
+        try {
+            if (!discoveryRoot || !this.moduleSettings[IndustrialConnectProxyGatewayCapability.wpOpcEndpoint].uri) {
+                response.message = `Some of the required settings for fetchNodes are missing`;
+
+                this.server.log([ModuleName, 'error'], response.message);
+            }
+            else {
+                await this.iotCentralPluginModule.sendMeasurement({
+                    [IndustrialConnectProxyGatewayCapability.evFetchedOpcNodesAutoDiscovery]: `Starting auto-discovery at node: ${discoveryRoot}`
+                }, IotcOutputName);
+
+
+                const fetchNodesResult = await this.fetchNodes({
+                    opcEndpoint: this.moduleSettings[IndustrialConnectProxyGatewayCapability.wpOpcEndpoint],
+                    startNode: discoveryRoot,
+                    depth: 5,
+                    requestedNodeClasses: [1, 2],
+                    requestedAttributes: [2, 3, 4, 5, 14]
+                });
+
+                response.status = fetchNodesResult.status;
+
+                if (response.status !== 200) {
+                    response.message = fetchNodesResult.message || `An error occurred while testing the opcua url`;
+                    response.payload = fetchNodesResult.payload || {};
+
+                    this.server.log([ModuleName, 'error'], response.message);
+                }
+                else {
+                    response.message = `fetchNodes succeeded for root node: ${discoveryRoot}`;
+
+                    this.server.log([ModuleName, 'info'], response.message);
+                }
+            }
+        }
+        catch (ex) {
+            response.status = 500;
+            response.message = `testConnection failed: ${ex.message}`;
+
+            this.server.log([ModuleName, 'error'], response.message);
+        }
+
+        return response;
+    }
+
+    private async testConnection(testConnectionRequest: ICModels.TestConnectionRequest): Promise<IModuleCommandResponse> {
         this.server.log([ModuleName, 'info'], `testConnection - url: ${testConnectionRequest.opcEndpoint.uri}`);
 
         const response: IModuleCommandResponse = {
@@ -371,7 +311,7 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         return response;
     }
 
-    private async fetchNodes(browseNodesRequest: IBrowseNodesRequest): Promise<IModuleCommandResponse> {
+    private async fetchNodes(browseNodesRequest: ICModels.BrowseNodesRequest): Promise<IModuleCommandResponse> {
         this.server.log([ModuleName, 'info'], `fetchNodes`);
 
         const response: IModuleCommandResponse = {
@@ -380,11 +320,13 @@ export class MiabGatewayService implements IMiabGatewayUtility {
             payload: {}
         };
 
+        const fetchJobId = uuidv4();
+
         try {
             this.server.log([ModuleName, 'info'], `Starting node: ${browseNodesRequest.startNode}, depth: ${browseNodesRequest.depth}`);
 
             await this.iotCentralPluginModule.sendMeasurement({
-                [MiabGatewayCapability.evFetchedOpcNodesStarted]: `Starting node: ${browseNodesRequest.startNode}, depth: ${browseNodesRequest.depth}`
+                [IndustrialConnectProxyGatewayCapability.evFetchedOpcNodesStarted]: `Starting node: ${browseNodesRequest.startNode}, depth: ${browseNodesRequest.depth}, jobId: ${fetchJobId}`
             }, IotcOutputName);
 
             this.server.log([ModuleName, 'info'], `Calling BrowseNodes_v1`);
@@ -407,12 +349,9 @@ export class MiabGatewayService implements IMiabGatewayUtility {
 
                 let fetchBrowsedNodesResult;
 
-                const fetchedNodesFileWriteStream = fileStream(fetchedNodesFilePath);
+                const fetchedNodesFileWriteStream = writeFileStream(fetchedNodesFilePath);
                 fetchedNodesFileWriteStream.create();
                 await fetchedNodesFileWriteStream.write('[');
-
-                let totalSize = 0;
-                const fetchedNodesUploadContext = await this.server.settings.app.largePayload.createUploadTelemetryContext(true, blobFilename);
 
                 try {
                     do {
@@ -431,14 +370,10 @@ export class MiabGatewayService implements IMiabGatewayUtility {
                             for (const node of fetchBrowsedNodesResult.payload.nodes) {
                                 await fetchedNodesFileWriteStream.writeJson(node);
 
-                                if (iNode++ < fetchBrowsedNodesResult.payload.nodes.length) {
+                                if (++iNode < fetchBrowsedNodesResult.payload.nodes.length) {
                                     await fetchedNodesFileWriteStream.write(',');
                                 }
                             }
-
-                            // returned compressed payload is a base64 string
-                            totalSize += (fetchBrowsedNodesResult.payload.compressedPayload as string).length;
-                            await this.server.settings.app.largePayload.sendUploadTelemetryPayload(fetchedNodesUploadContext, fetchBrowsedNodesResult.payload.compressedPayload);
                         }
 
                         response.status = fetchBrowsedNodesResult.status;
@@ -453,12 +388,14 @@ export class MiabGatewayService implements IMiabGatewayUtility {
                 finally {
                     await fetchedNodesFileWriteStream.write(']');
                     await fetchedNodesFileWriteStream.close();
-                    await this.server.settings.app.largePayload.closeUploadTelemetryContext(fetchedNodesUploadContext, totalSize, response.status);
                 }
 
-                // if (fetchBrowsedNodesResult.status === 200) {
-                //     await this.uploadFetchedNodesFile(fetchedNodesFilePath, blobFilename, 'application/json');
-                // }
+                if (fetchBrowsedNodesResult.status === 200) {
+                    // await this.uploadFetchedNodesFile(fetchedNodesFilePath, blobFilename, 'application/json');
+
+                    // don't wait for this
+                    void this.iotCentralPluginModule.sendLargePayload(fetchedNodesFilePath);
+                }
 
                 response.status = fetchBrowsedNodesResult.status;
                 response.message = fetchBrowsedNodesResult.message;
@@ -472,9 +409,16 @@ export class MiabGatewayService implements IMiabGatewayUtility {
             this.server.log([ModuleName, 'error'], response.message);
         }
 
-        await this.iotCentralPluginModule.sendMeasurement({
-            [MiabGatewayCapability.evFetchedOpcNodesFinished]: `Status: ${response.status}`
-        }, IotcOutputName);
+        if (response.status === 200) {
+            await this.iotCentralPluginModule.sendMeasurement({
+                [IndustrialConnectProxyGatewayCapability.evFetchedOpcNodesFinished]: `Status: ${response.status}, jobId: ${fetchJobId}`
+            }, IotcOutputName);
+        }
+        else {
+            await this.iotCentralPluginModule.sendMeasurement({
+                [IndustrialConnectProxyGatewayCapability.evFetchedOpcNodesError]: `Status: ${response.status}, jobId: ${fetchJobId}, Message: ${response.message},`
+            }, IotcOutputName);
+        }
 
         return response;
     }
@@ -516,7 +460,7 @@ export class MiabGatewayService implements IMiabGatewayUtility {
             const blobUrl = await this.server.settings.app.blobStorage.putFileIntoBlobStorage(fetchedNodesFilePath, blobFilename, contentType);
 
             await this.iotCentralPluginModule.sendMeasurement({
-                [MiabGatewayCapability.evFetchedOpcNodesUploaded]: blobUrl
+                [IndustrialConnectProxyGatewayCapability.evFetchedOpcNodesUploaded]: blobUrl
             }, IotcOutputName);
         }
         catch (ex) {
@@ -528,7 +472,7 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         return result;
     }
 
-    private async writeValues(writeNodesRequests: IWriteValuesRequest[]): Promise<IModuleCommandResponse> {
+    private async writeValues(writeNodesRequests: ICModels.WriteValuesRequest[]): Promise<IModuleCommandResponse> {
         this.server.log([ModuleName, 'info'], `writeValues`);
 
         const response: IModuleCommandResponse = {
@@ -552,7 +496,7 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         return response;
     }
 
-    private async readValues(readNodesRequests: IReadValuesRequest[]): Promise<IModuleCommandResponse> {
+    private async readValues(readNodesRequests: ICModels.ReadValuesRequest[]): Promise<IModuleCommandResponse> {
         this.server.log([ModuleName, 'info'], `readValues`);
 
         const response: IModuleCommandResponse = {
@@ -576,7 +520,7 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         return response;
     }
 
-    private async addOrUpdateAssets(addOrUpdateAssetsRequests: IAddOrUpdateAssetRequest[]): Promise<IModuleCommandResponse> {
+    private async addOrUpdateAssets(addOrUpdateAssetsRequests: ICModels.AddOrUpdateAssetRequest[]): Promise<IModuleCommandResponse> {
         this.server.log([ModuleName, 'info'], `addOrUpdateAssets`);
 
         const response: IModuleCommandResponse = {
@@ -625,7 +569,7 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         return response;
     }
 
-    private async removeAssets(assetIds: IRemoveAssetRequest[]): Promise<IModuleCommandResponse> {
+    private async removeAssets(assetIds: ICModels.RemoveAssetRequest[]): Promise<IModuleCommandResponse> {
         this.server.log([ModuleName, 'info'], `removeAssets`);
 
         const response: IModuleCommandResponse = {
@@ -722,42 +666,6 @@ export class MiabGatewayService implements IMiabGatewayUtility {
         return response;
     }
 
-    private async restartModule(timeout: number, reason: string): Promise<void> {
-        this.server.log([ModuleName, 'info'], `restartModule`);
-
-        try {
-            await this.iotCentralPluginModule.sendMeasurement({
-                [MiabGatewayCapability.evModuleRestart]: reason,
-                [MiabGatewayCapability.stModuleState]: ModuleState.Inactive,
-                [MiabGatewayCapability.evModuleStopped]: 'Module restart'
-            }, IotcOutputName);
-
-            await sleep(1000 * timeout);
-        }
-        catch (ex) {
-            this.server.log([ModuleName, 'error'], `${ex.message}`);
-        }
-
-        // let Docker restart our container after 5 additional seconds to allow responses to this method to return
-        setTimeout(() => {
-            this.server.log([ModuleName, 'info'], `Shutting down main process - module container will restart`);
-            process.exit(1);
-        }, 1000 * 5);
-    }
-
-    private async getSystemProperties(): Promise<ISystemProperties> {
-        const cpus = osCpus();
-        const cpuUsageSamples = osLoadAvg();
-
-        return {
-            cpuModel: cpus[0]?.model || 'Unknown',
-            cpuCores: cpus?.length || 0,
-            cpuUsage: cpuUsageSamples[0],
-            totalMemory: osTotalMem() / 1024,
-            freeMemory: osFreeMem() / 1024
-        };
-    }
-
     @bind
     private async handleDirectMethod(commandRequest: DeviceMethodRequest, commandResponse: DeviceMethodResponse) {
         this.server.log([ModuleName, 'info'], `${commandRequest.methodName} command received`);
@@ -769,40 +677,36 @@ export class MiabGatewayService implements IMiabGatewayUtility {
 
         try {
             switch (commandRequest.methodName) {
-                case MiabGatewayCapability.cmTestConnection:
+                case IndustrialConnectProxyGatewayCapability.cmStartOpcNodeDiscovery:
+                    response = await this.startOpcNodeDiscovery();
+                    break;
+
+                case IndustrialConnectProxyGatewayCapability.cmTestConnection:
                     response = await this.testConnection(commandRequest.payload);
                     break;
 
-                case MiabGatewayCapability.cmFetchNodes:
+                case IndustrialConnectProxyGatewayCapability.cmFetchNodes:
                     response = await this.fetchNodes(commandRequest.payload);
                     break;
 
-                case MiabGatewayCapability.cmWriteValues:
+                case IndustrialConnectProxyGatewayCapability.cmWriteValues:
                     response = await this.writeValues(commandRequest.payload);
                     break;
 
-                case MiabGatewayCapability.cmReadValues:
+                case IndustrialConnectProxyGatewayCapability.cmReadValues:
                     response = await this.readValues(commandRequest.payload);
                     break;
 
-                case MiabGatewayCapability.cmAddOrUpdateAssets:
+                case IndustrialConnectProxyGatewayCapability.cmAddOrUpdateAssets:
                     response = await this.addOrUpdateAssets(commandRequest.payload);
                     break;
 
-                case MiabGatewayCapability.cmGetAllAssets:
+                case IndustrialConnectProxyGatewayCapability.cmGetAllAssets:
                     response = await this.getAllAssets();
                     break;
 
-                case MiabGatewayCapability.cmRemoveAssets:
+                case IndustrialConnectProxyGatewayCapability.cmRemoveAssets:
                     response = await this.removeAssets(commandRequest.payload);
-                    break;
-
-
-                case MiabGatewayCapability.cmRestartGatewayModule:
-                    await this.restartModule((commandRequest?.payload as IRestartGatewayModuleCommandRequestParams)?.timeout || 0, 'RestartModule command received');
-
-                    response.status = 200;
-                    response.message = 'Restart module request received';
                     break;
 
                 default:

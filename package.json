@@ -1,7 +1,7 @@
 {
-    "name": "iotc-miab-gateway",
+    "name": "iotc-industrialconnect-gateway",
     "version": "1.0.0",
-    "description": "Azure IoT Central edge gateway module for MiaB",
+    "description": "Azure IoT Central edge gateway module for Industrial Connect",
     "main": "index.js",
     "scripts": {
         "test": "node ./node_modules/jest/bin/jest.js",
