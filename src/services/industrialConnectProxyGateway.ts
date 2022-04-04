@@ -18,7 +18,7 @@ import {
 } from 'zlib';
 import * as Wreck from '@hapi/wreck';
 import { v4 as uuidv4 } from 'uuid';
-import { bind, sleep, fileStream } from '../utils';
+import { bind, sleep, writeFileStream } from '../utils';
 import { Models as ICModels } from '../types/industrialConnect';
 import moment = require('moment');
 
@@ -349,7 +349,7 @@ export class IndustrialConnectProxyGatewayService implements IIndustrialConnectP
 
                 let fetchBrowsedNodesResult;
 
-                const fetchedNodesFileWriteStream = fileStream(fetchedNodesFilePath);
+                const fetchedNodesFileWriteStream = writeFileStream(fetchedNodesFilePath);
                 fetchedNodesFileWriteStream.create();
                 await fetchedNodesFileWriteStream.write('[');
 

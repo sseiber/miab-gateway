@@ -7,6 +7,11 @@ import {
     DeviceMethodRequest,
     DeviceMethodResponse
 } from 'azure-iot-device';
+import {
+    pipeline,
+    Transform,
+    TransformCallback
+} from 'stream';
 import { createGzip } from 'zlib';
 import * as fse from 'fs-extra';
 import {
@@ -24,6 +29,7 @@ import {
     freemem as osFreeMem,
     loadavg as osLoadAvg
 } from 'os';
+import { v4 as uuidv4 } from 'uuid';
 import { HealthState } from '../services/health';
 import { bind, defer, sleep } from '../utils';
 
@@ -35,6 +41,7 @@ declare module '@hapi/hapi' {
 
 const PluginName = 'IotCentralPlugin';
 const ModuleName = 'IotCentralPluginModule';
+const LargePayloadModule = 'LargePayloadModule';
 const defaultHealthCheckRetries = 3;
 
 export const IotcOutputName = 'iotc';
@@ -98,12 +105,14 @@ export const iotCentralPluginModule: Plugin<any> = {
 
 interface ILargePayloadTelemetryChunk {
     mp: string; // '1' = true
+    ji: string; // guid
     fn: string; // base filename with extension
     pt: string; // part number (string)
     gz: string; // gzipped, '1' = true
 }
 
 interface ILargePayloadTelemetryStatus {
+    ji: string; // guid
     fn: string; // base filename with extension
     st: string; // upload status (200 = success, 500 = exception)
     sm: string; // status message
@@ -156,6 +165,7 @@ enum IoTCentralModuleCapability {
     evModuleStarted = 'evModuleStarted',
     evModuleStopped = 'evModuleStopped',
     evModuleRestart = 'evModuleRestart',
+    evLargePayloadStatus = 'evLargePayloadStatus',
     wpDebugTelemetry = 'wpDebugTelemetry',
     cmRestartGatewayModule = 'cmRestartGatewayModule'
 }
@@ -392,80 +402,136 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
     }
 
     public async sendLargePayload(localFilepath: string): Promise<void> {
-        this.server.log([ModuleName, 'info'], `sendLargePayload`);
+        this.server.log([LargePayloadModule, 'info'], `sendLargePayload`);
 
         try {
-            this.server.log([ModuleName, 'info'], `Preparing to gzip file at ${localFilepath}`);
+            this.server.log([LargePayloadModule, 'info'], `Preparing to gzip file at ${localFilepath}`);
 
             const baseFilename = pathBasename(localFilepath);
-            const gzipFilepath = `${localFilepath}.gz`;
 
             // Base64 encodes each set of 3 bytes into 4 bytes. Also, the output
             // is padded to be a multiple of 4. The size of the base64 converted
             // bytes of size (n) is Math.ceil(n / 3) * 4. So, if we have a budget
-            // of 128Kb chunks (IoT Hub telemetry budget) we will use .75 of that
-            // or 96Kb.
-            const readChunkSize = 1024 * 96;
+            // of 256Kb chunks (IoT Hub telemetry budget) we will use .75 of that
+            // or 192Kb.
+            const payloadOverhead = JSON.stringify({
+                data: {}
+            }).length;
+            const payloadMin = (1024 * 192) - payloadOverhead;
+            const payloadMax = (1024 * 256) - payloadOverhead;
+
+            let iChunk = 0;
+            let chunkBytes = 0;
+            let totalBytes = 0;
+            const jobId = uuidv4();
+            const chunkSize = 1024 * 16;
+            const chunkBuffers: Buffer[] = [];
+            const fileUploadTransform = new FileUploadTransform(this, {
+                async transform(chunk: any, _encoding: BufferEncoding, done: TransformCallback): Promise<void> {
+                    try {
+                        const length = chunk.length;
+
+                        totalBytes += length;
+                        chunkBytes += length;
+
+                        if (chunkBytes + chunkSize >= payloadMin && chunkBytes + chunkSize <= payloadMax) {
+                            this.iotcPluginModule.server.log([LargePayloadModule, 'info'], `chunkSize: ${length}, chunkBytes: ${chunkBytes}, totalBytes: ${totalBytes}`);
+
+                            chunkBuffers.push(chunk);
+
+                            const chunkProps: ILargePayloadTelemetryChunk = {
+                                mp: '1',
+                                ji: jobId,
+                                fn: baseFilename,
+                                pt: `${iChunk++}`,
+                                gz: '1'
+                            };
+
+                            await this.iotcPluginModule.sendLargePayloadMessage({
+                                data: Buffer.concat(chunkBuffers).toString('base64')
+                            }, chunkProps);
+
+                            chunkBuffers.length = 0;
+                            chunkBytes = 0;
+                        }
+                        else {
+                            chunkBuffers.push(chunk);
+
+                            this.iotcPluginModule.server.log([LargePayloadModule, 'info'], `    chunkSize: ${length}, chunkBytes: ${chunkBytes}, totalBytes: ${totalBytes}`);
+                        }
+                    }
+                    catch (ex) {
+                        this.iotcPluginModule.server.log([LargePayloadModule, 'error'], `Error during transform chunk processing: ${ex.message}`);
+                    }
+
+                    return done();
+                },
+                async flush(done: TransformCallback): Promise<void> {
+                    try {
+                        if (chunkBytes) {
+                            this.iotcPluginModule.server.log([LargePayloadModule, 'info'], `chunkSize: ${chunkBytes}, chunkBytes: ${chunkBytes}, totalBytes: ${totalBytes}`);
+
+                            const chunkProps: ILargePayloadTelemetryChunk = {
+                                mp: '1',
+                                ji: jobId,
+                                fn: baseFilename,
+                                pt: `${iChunk++}`,
+                                gz: '1'
+                            };
+
+                            await this.iotcPluginModule.sendLargePayloadMessage({
+                                data: Buffer.concat(chunkBuffers).toString('base64')
+                            }, chunkProps);
+                        }
+                    }
+                    catch (ex) {
+                        this.iotcPluginModule.server.log([LargePayloadModule, 'error'], `Error during transform final flush: ${ex.message}`);
+                    }
+
+                    return done();
+                }
+            });
+
+            this.server.log([LargePayloadModule, 'info'], `Starting gzip and upload pipeline on file: ${localFilepath}`);
 
             const r = fse.createReadStream(localFilepath);
             const z = createGzip();
-            const w = fse.createWriteStream(gzipFilepath);
-            r.pipe(z).pipe(w);
+            pipeline(
+                r,
+                z,
+                fileUploadTransform,
+                async (err) => {
+                    let statusCode = 200;
+                    let statusMessage = '';
 
-            this.server.log([ModuleName, 'info'], `Starting chunk upload of gzipped file: ${gzipFilepath}`);
+                    if (err) {
+                        statusCode = 500;
+                        statusMessage = `Error during upload pipeline processing: ${err.message}`;
 
-            const readable = fse.createReadStream(gzipFilepath, {
-                highWaterMark: readChunkSize
-            });
-
-            readable.on('readable', () => {
-                let chunk;
-                let iChunk = 0;
-                let totalBytes = 0;
-                let statusCode = 200;
-                let statusMessage = 'Succeeded';
-
-                try {
-                    while (null !== (chunk = readable.read(readChunkSize))) {
-                        totalBytes += chunk.length;
-
-                        const chunkProps: ILargePayloadTelemetryChunk = {
-                            mp: '1',
-                            fn: baseFilename,
-                            pt: `${iChunk++}`,
-                            gz: '1'
-                        };
-
-                        void this.sendLargePayloadMessage({
-                            lpData: chunk.toString('base64')
-                        }, chunkProps);
+                        this.server.log([LargePayloadModule, 'error'], statusMessage);
                     }
-                }
-                catch (ex) {
-                    statusCode = 500;
-                    statusMessage = `Error while sending larage payload telemetry chunks: ${ex.message}`;
+                    else {
+                        this.server.log([LargePayloadModule, 'info'], `Upload pipeline processing succeeded`);
 
-                    this.server.log([ModuleName, 'error'], statusMessage);
-                }
-                finally {
+                        statusMessage = `LF Payload, JobId: ${jobId}, st: ${statusCode}, sz: ${totalBytes}, fn: ${baseFilename}`;
+                    }
+
                     const statusTelemetry: ILargePayloadTelemetryStatus = {
+                        ji: jobId,
                         fn: baseFilename,
                         st: `${statusCode}`,
                         sm: statusMessage,
                         sz: `${totalBytes}`
                     };
 
-                    void this.sendLargePayloadMessage(statusTelemetry);
+                    await this.sendLargePayloadMessage({
+                        [IoTCentralModuleCapability.evLargePayloadStatus]: statusTelemetry
+                    });
                 }
-            });
-
-            readable.on('close', () => {
-                this.server.log([ModuleName, 'info'], `Finished processing chunks for telemetry`);
-            });
-
+            );
         }
         catch (ex) {
-            this.server.log([ModuleName, 'error'], `Error preparing file for large payload upload: ${ex.message} `);
+            this.server.log([LargePayloadModule, 'error'], `Error preparing file for large payload upload: ${ex.message} `);
         }
 
         return;
@@ -482,6 +548,10 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
             iotcMessage.contentType = 'application/json';
             iotcMessage.contentEncoding = 'utf-8';
 
+            if (this.debugTelemetry() && properties) {
+                this.server.log([LargePayloadModule, 'info'], `sendLargePayloadMessage included properties: ${JSON.stringify(properties, null, 4)}`);
+            }
+
             for (const prop in properties) {
                 if (!Object.prototype.hasOwnProperty.call(properties, prop)) {
                     continue;
@@ -493,11 +563,11 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
             await this.moduleClient.sendOutputEvent(IotcOutputName, iotcMessage);
 
             if (this.debugTelemetry()) {
-                this.server.log([ModuleName, 'info'], `sendMeasurementWithProperties: ${JSON.stringify(data, null, 4)}`);
+                this.server.log([LargePayloadModule, 'info'], `sendLargePayloadMessage: ${JSON.stringify(data, null, 4)}`);
             }
         }
         catch (ex) {
-            this.server.log([ModuleName, 'error'], `sendMeasurementWithProperties: ${ex.message}`);
+            this.server.log([LargePayloadModule, 'error'], `sendLargePayloadMessage: ${ex.message}`);
         }
     }
 
@@ -739,5 +809,25 @@ class IotCentralPluginModule implements IIotCentralPluginModule {
             totalMemory: osTotalMem() / 1024,
             freeMemory: osFreeMem() / 1024
         };
+    }
+}
+
+class FileUploadTransform extends Transform {
+    public iotcPluginModule: IotCentralPluginModule;
+
+    constructor(iotcPluginModule: IotCentralPluginModule, options: any) {
+        super(options);
+
+        this.iotcPluginModule = iotcPluginModule;
+    }
+
+    public _transform(chunk, _encoding, done): Promise<void> {
+        this.push(chunk);
+
+        return done();
+    }
+
+    public _flush(done) {
+        return done();
     }
 }
